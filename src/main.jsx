@@ -11,9 +11,11 @@ function App() {
         <source srcSet="/mobile.svg" media="(max-width: 767px)" />
         <img className="landingImage" src="/pc.svg" alt="" />
       </picture>
-      <a className="installButton" href={INSTALL_URL}>
-        {'\uC571 \uB2E4\uC6B4\uB85C\uB4DC\uD558\uAE30'}
-      </a>
+      <a
+        className="downloadHotspot"
+        href={INSTALL_URL}
+        aria-label="앱 다운로드하기"
+      />
     </main>
   )
 }
