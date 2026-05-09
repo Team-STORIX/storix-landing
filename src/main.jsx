@@ -2,27 +2,17 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
-const LANDING_IMAGE = '/landing.png'
-const IOS_INSTALL_URL = 'https://apps.apple.com/app/storix/id0000000000'
-const ANDROID_INSTALL_URL =
-  'https://play.google.com/store/apps/details?id=com.storix.app'
-
-function getInstallUrl() {
-  const userAgent = window.navigator.userAgent.toLowerCase()
-
-  if (/iphone|ipad|ipod/.test(userAgent)) {
-    return IOS_INSTALL_URL
-  }
-
-  return ANDROID_INSTALL_URL
-}
+const INSTALL_URL = 'https://github.com/Team-STORIX'
 
 function App() {
   return (
     <main className="landing">
-      <img className="landingImage" src={LANDING_IMAGE} alt="" />
-      <a className="installButton" href={getInstallUrl()}>
-        {'\uC571 \uC124\uCE58\uD558\uAE30'}
+      <picture className="landingPicture">
+        <source srcSet="/mobile.svg" media="(max-width: 767px)" />
+        <img className="landingImage" src="/pc.svg" alt="" />
+      </picture>
+      <a className="installButton" href={INSTALL_URL}>
+        {'\uC571 \uB2E4\uC6B4\uB85C\uB4DC\uD558\uAE30'}
       </a>
     </main>
   )
