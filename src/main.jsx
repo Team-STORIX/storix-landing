@@ -2,7 +2,7 @@ import React from 'react'
 import { createRoot } from 'react-dom/client'
 import './styles.css'
 
-const INSTALL_URL = 'https://github.com/Team-STORIX'
+const INSTALL_URL = 'https://truth-gopher-09e.notion.site/35de81f7094880bba04fd4eaef2d5e42'
 
 function App() {
   return (
@@ -17,7 +17,7 @@ function App() {
         aria-label="앱 다운로드하기"
       />
     </main>
-  )
+  )url
 }
 
 createRoot(document.getElementById('root')).render(
