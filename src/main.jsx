@@ -17,7 +17,7 @@ function App() {
         aria-label="앱 다운로드하기"
       />
     </main>
-  )url
+  )
 }
 
 createRoot(document.getElementById('root')).render(
