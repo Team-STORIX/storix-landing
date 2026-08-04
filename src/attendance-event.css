@@ -1,0 +1,294 @@
+@font-face {
+  font-family: 'SUIT';
+  src: url('/fonts/SUIT-Medium.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SUIT';
+  src: url('/fonts/SUIT-Bold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SUIT';
+  src: url('/fonts/SUIT-ExtraBold.ttf') format('truetype');
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+}
+
+.attendanceEventPage {
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  min-height: 100dvh;
+  margin: 0 auto;
+  background: #f9f6f7;
+  color: #131112;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-weight: 500;
+}
+
+.attendanceHeader {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: grid;
+  grid-template-columns: 24px 1fr 24px;
+  align-items: center;
+  min-height: calc(56px + env(safe-area-inset-top));
+  padding: env(safe-area-inset-top) 16px 0;
+  background: #ffffff;
+}
+
+.attendanceHeader h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 22.4px;
+  text-align: center;
+}
+
+.attendanceBackButton {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  place-items: center;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.attendanceBackButton img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.attendanceBackButton:active {
+  opacity: 0.7;
+}
+
+.attendanceHeaderSpacer {
+  width: 24px;
+  height: 24px;
+}
+
+.attendanceStampSection {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  padding: 32px 20px;
+  background: #ff4093;
+}
+
+.attendanceSectionLabel {
+  display: block;
+  width: 130px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.attendanceStampBoard {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 72px));
+  gap: 8px;
+  width: 100%;
+  max-width: 352px;
+  padding: 20px;
+  border-radius: 10px;
+  background: #ff62a1;
+}
+
+.attendanceStamp {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1;
+}
+
+.attendanceCheckInButton {
+  display: flex;
+  gap: 8px;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 40px;
+  border: 0;
+  border-radius: 8px;
+  background: #131112;
+  color: #ffffff;
+  font: 700 14px/19.6px 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.attendanceCheckInButton:active:not(:disabled) {
+  opacity: 0.7;
+}
+
+.attendanceCheckInButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.attendanceSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: #ffffff;
+  border-radius: 50%;
+  animation: attendanceSpin 700ms linear infinite;
+}
+
+.attendanceInlineStatus {
+  max-width: 352px;
+  margin: -12px 0 0;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 16.8px;
+  text-align: center;
+}
+
+.attendanceInlineStatus p {
+  margin: 0;
+}
+
+.attendanceInlineStatusAuth {
+  color: #ffffff;
+}
+
+.attendanceInlineStatusError {
+  color: #60102f;
+}
+
+.attendanceInlineStatusError button {
+  margin-top: 8px;
+  padding: 6px 12px;
+  border: 1px solid currentColor;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.attendanceInlineStatusSuccess {
+  color: #ffffff;
+}
+
+@keyframes attendanceSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.attendanceDetailSection {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding-top: 32px;
+  background: #ffffff;
+}
+
+.attendanceCopyBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 24px;
+}
+
+.attendanceCopyBlock h2,
+.attendanceCopyBlock p,
+.attendanceRewardDescription,
+.attendanceNoticeSection h2,
+.attendanceNoticeSection p {
+  margin: 0;
+}
+
+.attendanceCopyBlock h2 {
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 28px;
+}
+
+.attendanceCopyBlock p {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 19.6px;
+}
+
+.attendanceRewardSection {
+  display: flex;
+  min-height: 240px;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 36px;
+}
+
+.attendanceGiftCard {
+  display: block;
+  width: min(347px, 100%);
+  height: auto;
+  object-fit: contain;
+}
+
+.attendanceRewardDescription {
+  margin-top: 32px;
+  color: #484245;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 19.6px;
+  text-align: center;
+}
+
+.attendanceRewardDescription strong {
+  color: #ff4093;
+  font-weight: 800;
+}
+
+.attendanceNoticeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 28px 24px calc(28px + env(safe-area-inset-bottom));
+  background: #131112;
+  color: #b0a5aa;
+}
+
+.attendanceNoticeSection h2,
+.attendanceNoticeSection p {
+  font-size: 12px;
+  line-height: 16.8px;
+}
+
+.attendanceNoticeSection h2 {
+  font-weight: 800;
+}
+
+.attendanceNoticeSection p {
+  font-weight: 500;
+}
+
+@media (max-width: 359px) {
+  .attendanceStampBoard {
+    padding: 16px;
+  }
+
+  .attendanceStampSection {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .attendanceGiftCard {
+    width: calc(100% - 24px);
+  }
+}

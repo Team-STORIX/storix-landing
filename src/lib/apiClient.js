@@ -1,0 +1,97 @@
+import {
+  clearWebViewAccessToken,
+  getWebViewAccessToken,
+} from './webViewAuth.js'
+
+const viteEnv = import.meta.env || {}
+
+const DEFAULT_API_BASE_URL = viteEnv.DEV
+  ? 'https://dev.storix.kr'
+  : 'https://api.storix.kr'
+
+const API_BASE_URL = (viteEnv.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+
+export class ApiError extends Error {
+  constructor(message, { status, code, cause } = {}) {
+    super(message, { cause })
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
+export class AuthenticationRequiredError extends ApiError {
+  constructor() {
+    super('로그인이 필요합니다.', { status: 401, code: 'AUTH_REQUIRED' })
+    this.name = 'AuthenticationRequiredError'
+  }
+}
+
+async function readJson(response) {
+  const text = await response.text()
+
+  if (!text) return null
+
+  try {
+    return JSON.parse(text)
+  } catch (cause) {
+    throw new ApiError('서버 응답을 확인할 수 없습니다.', {
+      status: response.status,
+      code: 'INVALID_JSON',
+      cause,
+    })
+  }
+}
+
+export async function apiRequest(path, { method = 'GET', signal } = {}) {
+  const token = getWebViewAccessToken()
+
+  if (!token) {
+    throw new AuthenticationRequiredError()
+  }
+
+  let response
+
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      signal,
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    })
+  } catch (cause) {
+    if (cause?.name === 'AbortError') throw cause
+
+    throw new ApiError('네트워크 연결을 확인해주세요.', {
+      code: 'NETWORK_ERROR',
+      cause,
+    })
+  }
+
+  const body = await readJson(response)
+
+  if (!response.ok || body?.isSuccess === false) {
+    if (response.status === 401) {
+      clearWebViewAccessToken()
+    }
+
+    throw new ApiError(body?.message || '요청을 처리하지 못했습니다.', {
+      status: response.status,
+      code: body?.code,
+    })
+  }
+
+  if (!body || !Object.prototype.hasOwnProperty.call(body, 'result')) {
+    throw new ApiError('서버 응답에 result가 없습니다.', {
+      status: response.status,
+      code: 'INVALID_RESPONSE',
+    })
+  }
+
+  return body.result
+}
+
+export { API_BASE_URL }
