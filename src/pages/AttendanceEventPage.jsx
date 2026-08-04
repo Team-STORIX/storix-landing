@@ -204,6 +204,7 @@ export default function AttendanceEventPage() {
     : status?.attendedToday
       ? '오늘 출석 완료'
       : '오늘치 출석 도장 찍기'
+  const isCheckInCompleted = isCheckInPending || status?.attendedToday
 
   return (
     <main className="attendanceEventPage">
@@ -247,7 +248,7 @@ export default function AttendanceEventPage() {
         </div>
 
         <button
-          className="attendanceCheckInButton"
+          className={`attendanceCheckInButton${isCheckInCompleted ? ' attendanceCheckInButtonCompleted' : ''}`}
           type="button"
           onClick={handleCheckIn}
           disabled={isCheckInDisabled}

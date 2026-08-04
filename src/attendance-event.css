@@ -139,6 +139,12 @@
   opacity: 0.55;
 }
 
+.attendanceCheckInButtonCompleted,
+.attendanceCheckInButtonCompleted:disabled {
+  background: #484245;
+  opacity: 1;
+}
+
 .attendanceSpinner {
   width: 14px;
   height: 14px;
