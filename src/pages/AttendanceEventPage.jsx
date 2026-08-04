@@ -199,12 +199,10 @@ export default function AttendanceEventPage() {
     }
   }
 
-  const buttonLabel = isCheckInPending
-    ? '출석 처리 중'
-    : status?.attendedToday
-      ? '오늘 출석 완료'
-      : '오늘치 출석 도장 찍기'
   const isCheckInCompleted = isCheckInPending || status?.attendedToday
+  const buttonLabel = isCheckInCompleted
+    ? '이미 출석체크를 완료했어요'
+    : '오늘치 출석 도장 찍기'
 
   return (
     <main className="attendanceEventPage">
@@ -253,7 +251,6 @@ export default function AttendanceEventPage() {
           onClick={handleCheckIn}
           disabled={isCheckInDisabled}
         >
-          {isCheckInPending && <span className="attendanceSpinner" aria-hidden="true" />}
           {buttonLabel}
         </button>
 
@@ -313,6 +310,9 @@ export default function AttendanceEventPage() {
         <p>• 응모권은 조건 달성 시 자동 지급됩니다.</p>
         <p>• 부정 참여가 확인될 경우 당첨이 취소될 수 있습니다.</p>
         <p>• 이벤트 종료 후 당첨자를 발표합니다.</p>
+        <p>• 이벤트 기간은 2026년 8월 10일(월) ~ 8월 21일(금) 입니다.</p>
+        <p>• 당첨 안내는 마케팅 알림 수신 동의자에 한하여 앱 푸시로 발송됩니다.</p>
+        <p>• 마케팅 알림 수신에 동의하지 않았거나 이벤트 종료 전 수신을 해제한 경우, 당첨 안내를 받지 못할 수 있습니다.</p>
       </section>
     </main>
   )

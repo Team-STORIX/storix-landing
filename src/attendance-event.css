@@ -141,17 +141,9 @@
 
 .attendanceCheckInButtonCompleted,
 .attendanceCheckInButtonCompleted:disabled {
-  background: #484245;
+  border-radius: 12px;
+  background: #ff80b3;
   opacity: 1;
-}
-
-.attendanceSpinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgb(255 255 255 / 35%);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: attendanceSpin 700ms linear infinite;
 }
 
 .attendanceInlineStatus {
@@ -189,12 +181,6 @@
 
 .attendanceInlineStatusSuccess {
   color: #ffffff;
-}
-
-@keyframes attendanceSpin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .attendanceDetailSection {
