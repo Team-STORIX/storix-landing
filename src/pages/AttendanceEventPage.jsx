@@ -51,9 +51,11 @@ export default function AttendanceEventPage({ appEventId = null }) {
   useEffect(() => {
     const previousTitle = document.title
     document.title = '앱 런칭 기념 출석 이벤트 | STORIX'
+    document.documentElement.classList.add('attendanceDocument')
 
     return () => {
       document.title = previousTitle
+      document.documentElement.classList.remove('attendanceDocument')
     }
   }, [])
 
@@ -167,13 +169,6 @@ export default function AttendanceEventPage({ appEventId = null }) {
             issuedTickets: result.issuedTickets,
           }
         : currentStatus)
-
-      setCheckInFeedback({
-        type: 'success',
-        message: result.newlyIssuedTickets > 0
-          ? `출석 완료! 응모권 ${result.newlyIssuedTickets}장을 받았습니다.`
-          : '오늘 출석이 완료되었습니다.',
-      })
 
       postStorixWebViewMessage({
         type: 'ATTENDANCE_COMPLETED',

@@ -36,5 +36,9 @@ export function getDateKeysInRange(startDateKey, endDateKey, maximumCount = 12) 
     current = addDaysToDateKey(current, 1)
   }
 
+  while (dateKeys.length < maximumCount) {
+    dateKeys.push(null)
+  }
+
   return dateKeys
 }

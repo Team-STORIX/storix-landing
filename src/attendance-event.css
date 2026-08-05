@@ -6,6 +6,11 @@
   font-display: swap;
 }
 
+.attendanceDocument,
+.attendanceDocument body {
+  overscroll-behavior-y: none;
+}
+
 @font-face {
   font-family: 'SUIT';
   src: url('/fonts/SUIT-Bold.ttf') format('truetype');
