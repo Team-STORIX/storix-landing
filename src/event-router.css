@@ -60,10 +60,134 @@
   animation: event-loading-spin 700ms linear infinite;
 }
 
+.eventEndedPage {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #ffffff;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+}
+
+.eventEndedBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: calc(24px + env(safe-area-inset-top)) 24px
+    calc(24px + env(safe-area-inset-bottom));
+  background: rgb(19 17 18 / 60%);
+}
+
+.eventEndedModal {
+  width: min(306px, 100%);
+  padding: 28px 16px 16px;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.eventEndedContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.eventEndedIcon {
+  display: block;
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.eventEndedCopy {
+  width: 100%;
+  text-align: center;
+}
+
+.eventEndedCopy h1 {
+  margin: 0;
+  color: #131112;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.eventEndedCopy p {
+  margin: 8px 0 0;
+  color: #847b7f;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.eventEndedModal button {
+  width: 100%;
+  height: 49px;
+  margin-top: 28px;
+  padding: 8px 16px;
+  border: 0;
+  border-radius: 8px;
+  background: #131112;
+  color: #ffffff;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.eventEndedModal button:active {
+  opacity: 0.8;
+}
+
+.eventToastPage {
+  position: relative;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: #ffffff;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+}
+
+.eventErrorToast {
+  position: fixed;
+  right: 24px;
+  bottom: calc(32px + env(safe-area-inset-bottom));
+  left: 24px;
+  z-index: 100;
+  width: fit-content;
+  max-width: calc(100% - 48px);
+  margin: 0 auto;
+  padding: 13px 20px;
+  border-radius: 12px;
+  background: rgb(19 17 18 / 92%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  animation: event-toast-in 160ms ease-out;
+}
+
+@keyframes event-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 @keyframes event-loading-spin {
   to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .eventLoading { animation: none; }
+  .eventErrorToast { animation: none; }
 }

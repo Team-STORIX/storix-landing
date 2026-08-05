@@ -19,6 +19,11 @@ function closeEventPage() {
     return
   }
 
+  if (window.history.length > 1) {
+    window.history.back()
+    return
+  }
+
   window.location.assign('/')
 }
 
@@ -35,12 +40,52 @@ function EventStatePage({ title, description, actionLabel = '확인' }) {
   )
 }
 
-function EventEndedPage({ event }) {
+function EventErrorToast() {
+  const [visible, setVisible] = useState(true)
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => setVisible(false), 2500)
+    return () => window.clearTimeout(timeoutId)
+  }, [])
+
   return (
-    <EventStatePage
-      title="종료된 이벤트입니다"
-      description={`${event.name} 이벤트가 종료되었습니다.`}
-    />
+    <main className="eventToastPage">
+      {visible ? (
+        <div className="eventErrorToast" role="status" aria-live="polite">
+          잠시 후 다시 시도해주세요.
+        </div>
+      ) : null}
+    </main>
+  )
+}
+
+function EventEndedPage() {
+  return (
+    <main className="eventEndedPage">
+      <div className="eventEndedBackdrop">
+        <section
+          className="eventEndedModal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="event-ended-title"
+          aria-describedby="event-ended-description"
+        >
+          <div className="eventEndedContent">
+            <img
+              className="eventEndedIcon"
+              src="/events/warning.png"
+              alt=""
+              aria-hidden="true"
+            />
+            <div className="eventEndedCopy">
+              <h1 id="event-ended-title">마감된 이벤트입니다</h1>
+              <p id="event-ended-description">다음 이벤트를 기대해주세요!</p>
+            </div>
+          </div>
+          <button type="button" onClick={closeEventPage}>확인</button>
+        </section>
+      </div>
+    </main>
   )
 }
 
@@ -80,12 +125,12 @@ export default function AppEventRouter({ appEventId }) {
 
   if (state.status === 'error') {
     const isNotFound = state.error instanceof ApiError && state.error.status === 404
+    if (!isNotFound) return <EventErrorToast />
+
     return (
       <EventStatePage
-        title={isNotFound ? '이벤트를 찾을 수 없습니다' : '이벤트를 불러오지 못했습니다'}
-        description={isNotFound
-          ? '존재하지 않거나 아직 시작하지 않은 이벤트입니다.'
-          : '네트워크 상태를 확인한 뒤 다시 접속해주세요.'}
+        title="이벤트를 찾을 수 없습니다"
+        description="존재하지 않거나 아직 시작하지 않은 이벤트입니다."
       />
     )
   }
@@ -93,7 +138,7 @@ export default function AppEventRouter({ appEventId }) {
   const event = state.event
 
   if (event.status === 'ENDED' || event.status === 'CANCELED') {
-    return <EventEndedPage event={event} />
+    return <EventEndedPage />
   }
 
   if (event.status !== 'ACTIVE') {
