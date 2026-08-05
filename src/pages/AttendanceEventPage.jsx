@@ -5,7 +5,10 @@ import {
   getWebViewAuthSnapshot,
   subscribeToWebViewAuth,
 } from '../lib/webViewAuth.js'
-import { postStorixWebViewMessage } from '../lib/webViewBridge.js'
+import {
+  isStorixWebView,
+  postStorixWebViewMessage,
+} from '../lib/webViewBridge.js'
 import {
   checkInAttendanceEvent,
   getAttendanceEventStatus,
@@ -35,7 +38,7 @@ function getAttendanceErrorMessage(error) {
   }
 }
 
-export default function AttendanceEventPage() {
+export default function AttendanceEventPage({ appEventId = null }) {
   const [authSnapshot, setAuthSnapshot] = useState(getWebViewAuthSnapshot)
   const [status, setStatus] = useState(null)
   const [isStatusLoading, setIsStatusLoading] = useState(false)
@@ -43,6 +46,7 @@ export default function AttendanceEventPage() {
   const [statusError, setStatusError] = useState(null)
   const [checkInFeedback, setCheckInFeedback] = useState(null)
   const checkInControllerRef = useRef(null)
+  const embeddedInStorixApp = isStorixWebView()
 
   useEffect(() => {
     const previousTitle = document.title
@@ -63,6 +67,12 @@ export default function AttendanceEventPage() {
 
     try {
       const nextStatus = await getAttendanceEventStatus({ signal })
+      if (appEventId != null && nextStatus.appEventId !== appEventId) {
+        throw new ApiError('진행 중인 출석 이벤트가 없습니다.', {
+          status: 404,
+          code: 'APP_EVENT_NOT_FOUND',
+        })
+      }
       setStatus(nextStatus)
       return nextStatus
     } catch (error) {
@@ -84,7 +94,7 @@ export default function AttendanceEventPage() {
     } finally {
       if (showLoading) setIsStatusLoading(false)
     }
-  }, [])
+  }, [appEventId])
 
   useEffect(() => {
     if (!authSnapshot.authenticated) {
@@ -206,18 +216,20 @@ export default function AttendanceEventPage() {
 
   return (
     <main className="attendanceEventPage">
-      <header className="attendanceHeader">
-        <button
-          className="attendanceBackButton"
-          type="button"
-          onClick={handleBack}
-          aria-label="뒤로가기"
-        >
-          <img src="/events/attendance/back.svg" alt="" />
-        </button>
-        <h1>앱 런칭 기념 출석 이벤트</h1>
-        <span className="attendanceHeaderSpacer" aria-hidden="true" />
-      </header>
+      {!embeddedInStorixApp && (
+        <header className="attendanceHeader">
+          <button
+            className="attendanceBackButton"
+            type="button"
+            onClick={handleBack}
+            aria-label="뒤로가기"
+          >
+            <img src="/events/attendance/back.svg" alt="" />
+          </button>
+          <h1>앱 런칭 기념 출석 이벤트</h1>
+          <span className="attendanceHeaderSpacer" aria-hidden="true" />
+        </header>
+      )}
 
       <section className="attendanceStampSection">
         <img

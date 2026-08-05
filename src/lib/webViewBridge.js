@@ -10,3 +10,7 @@ export function postStorixWebViewMessage(message) {
     return false
   }
 }
+
+export function isStorixWebView() {
+  return typeof window.ReactNativeWebView?.postMessage === 'function'
+}

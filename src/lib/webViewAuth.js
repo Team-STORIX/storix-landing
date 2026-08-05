@@ -1,6 +1,14 @@
 const AUTH_EVENT_NAME = 'STORIX_AUTH'
 
-let accessToken = null
+function normalizeAccessToken(token) {
+  return typeof token === 'string' && token.trim() ? token.trim() : null
+}
+
+const injectedAuth = typeof window !== 'undefined'
+  ? window.__STORIX_AUTH__
+  : null
+
+let accessToken = normalizeAccessToken(injectedAuth?.accessToken)
 let version = 0
 const subscribers = new Set()
 
@@ -17,7 +25,7 @@ function notifySubscribers() {
 }
 
 export function setWebViewAccessToken(token) {
-  const nextToken = typeof token === 'string' && token.trim() ? token.trim() : null
+  const nextToken = normalizeAccessToken(token)
 
   if (nextToken === accessToken) return
 

@@ -6,6 +6,11 @@ import './styles.css'
 
 function App() {
   const pathname = window.location.pathname.replace(/\/+$/, '') || '/'
+  const appEventMatch = pathname.match(/^\/event\/(\d+)$/)
+
+  if (appEventMatch) {
+    return <AttendanceEventPage appEventId={Number(appEventMatch[1])} />
+  }
 
   if (pathname === '/events/attendance') {
     return <AttendanceEventPage />
