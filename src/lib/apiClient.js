@@ -3,8 +3,13 @@ import {
   getWebViewAccessToken,
 } from './webViewAuth.js'
 
-// Temporary QA override: restore VITE_API_BASE_URL before production deployment.
-const API_BASE_URL = 'https://dev.storix.kr'
+const viteEnv = import.meta.env || {}
+
+const DEFAULT_API_BASE_URL = viteEnv.DEV
+  ? 'https://dev.storix.kr'
+  : 'https://api.storix.kr'
+
+const API_BASE_URL = (viteEnv.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
 
 export class ApiError extends Error {
   constructor(message, { status, code, cause } = {}) {
