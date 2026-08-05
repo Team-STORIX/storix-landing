@@ -43,12 +43,10 @@ async function readJson(response) {
   }
 }
 
-export async function apiRequest(path, { method = 'GET', signal } = {}) {
-  const token = getWebViewAccessToken()
+async function request(path, { method = 'GET', signal, authenticated }) {
+  const token = authenticated ? getWebViewAccessToken() : null
 
-  if (!token) {
-    throw new AuthenticationRequiredError()
-  }
+  if (authenticated && !token) throw new AuthenticationRequiredError()
 
   let response
 
@@ -59,7 +57,7 @@ export async function apiRequest(path, { method = 'GET', signal } = {}) {
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
     })
   } catch (cause) {
@@ -74,7 +72,7 @@ export async function apiRequest(path, { method = 'GET', signal } = {}) {
   const body = await readJson(response)
 
   if (!response.ok || body?.isSuccess === false) {
-    if (response.status === 401) {
+    if (authenticated && response.status === 401) {
       clearWebViewAccessToken()
     }
 
@@ -92,6 +90,14 @@ export async function apiRequest(path, { method = 'GET', signal } = {}) {
   }
 
   return body.result
+}
+
+export function apiRequest(path, options = {}) {
+  return request(path, { ...options, authenticated: true })
+}
+
+export function publicApiRequest(path, options = {}) {
+  return request(path, { ...options, authenticated: false })
 }
 
 export { API_BASE_URL }

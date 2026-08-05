@@ -57,6 +57,12 @@ function handleAuthEvent(event) {
 
 if (typeof window !== 'undefined') {
   window.addEventListener(AUTH_EVENT_NAME, handleAuthEvent)
+
+  if (typeof window.ReactNativeWebView?.postMessage === 'function') {
+    window.ReactNativeWebView.postMessage(JSON.stringify({
+      type: 'WEBVIEW_READY',
+    }))
+  }
 }
 
 export { AUTH_EVENT_NAME }

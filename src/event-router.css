@@ -1,0 +1,69 @@
+.eventStatePage {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: calc(32px + env(safe-area-inset-top)) 24px
+    calc(32px + env(safe-area-inset-bottom));
+  background: #fff;
+  color: #171317;
+}
+
+.eventStateCard {
+  width: min(100%, 360px);
+  text-align: center;
+}
+
+.eventStateMark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 24px;
+  border-radius: 20px;
+  background: #fff0f7;
+  color: #ff037a;
+  font-size: 30px;
+}
+
+.eventStateCard h1 {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.eventStateCard p {
+  margin: 12px 0 28px;
+  color: #746e72;
+  font-size: 15px;
+  line-height: 1.6;
+  word-break: keep-all;
+}
+
+.eventStateCard button {
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: 14px;
+  background: #ff037a;
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.eventLoading {
+  width: 36px;
+  height: 36px;
+  border: 3px solid #ffd1e7;
+  border-top-color: #ff037a;
+  border-radius: 50%;
+  animation: event-loading-spin 700ms linear infinite;
+}
+
+@keyframes event-loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .eventLoading { animation: none; }
+}
