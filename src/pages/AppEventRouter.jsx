@@ -7,6 +7,7 @@ import '../event-router.css'
 
 const PAGES = {
   'attendance-2026-08-10': AttendanceEventPage,
+  'attendance-2026-08-17': AttendanceEventPage,
 }
 
 const DEFAULT_BY_TYPE = {
