@@ -5,3 +5,5 @@ dist
 !.env.example
 .vercel
 vite-dev*.log
+.DS_Store
+**/.DS_Store
