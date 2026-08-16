@@ -1,0 +1,13 @@
+.storyCardEventPage {
+  min-height: 100vh;
+  padding: 24px 20px;
+  background: #ffffff;
+  color: #111111;
+}
+
+.storyCardEventPage h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.4;
+}
