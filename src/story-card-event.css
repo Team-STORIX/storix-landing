@@ -1,25 +1,441 @@
+@font-face {
+  font-family: 'SUIT';
+  src: url('/fonts/SUIT-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SUIT';
+  src: url('/fonts/SUIT-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 .storyCardDocument,
-.storyCardDocument body {
+.storyCardDocument body,
+.storyCardDocument #root {
+  height: 100%;
+  overflow: hidden;
   background: #000000;
-  overscroll-behavior-y: none;
+  overscroll-behavior: none;
 }
 
 .storyCardEventPage {
+  position: relative;
   width: 100%;
   max-width: 480px;
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
   margin: 0 auto;
-  padding: 24px 20px;
+  overflow: hidden;
   background: #000000;
   color: #ffffff;
   font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
   font-weight: 500;
 }
 
-.storyCardEventPage h1 {
+.storyCardEventPage-front {
+  background: #ffffff;
+  color: #131112;
+}
+
+.storyCardTopBar {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  height: 56px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+}
+
+.storyCardEventPage-front .storyCardTopBar {
+  background: #ffffff;
+}
+
+.storyCardTopBarIconButton {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storyCardTopBarIconButton img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.storyCardTopBarTitle {
+  position: absolute;
+  left: 56px;
+  right: 56px;
   margin: 0;
-  font-size: 24px;
+  color: var(--Grayscale-white, #ffffff);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 140%;
+}
+
+.storyCardEventPage-front .storyCardTopBarTitle {
+  color: var(--Grayscale-900, #131112);
+}
+
+.storyCardContent {
+  --card-height: min(216px, 31vh);
+  --card-width: calc(var(--card-height) * 0.645161);
+  position: relative;
+  height: calc(100dvh - 56px);
+  padding: 40px 40px 0;
+  overflow: hidden;
+}
+
+.storyCardFrontPage {
+  display: flex;
+  height: calc(100dvh - 56px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.storyCardFront {
+  display: flex;
+  width: min(310px, calc(100vw - 48px));
+  aspect-ratio: 310 / 464;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 14px 40px rgba(19, 17, 18, 0.14);
+}
+
+.storyCardFront img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storyCardFrontFallback {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px;
+  border: 1px solid #eee7eb;
+  color: #131112;
+  text-align: center;
+}
+
+.storyCardFrontFallback strong {
+  font-size: 22px;
   font-weight: 700;
-  line-height: 1.4;
+  line-height: 140%;
+}
+
+.storyCardFrontFallback span {
+  color: #5d5559;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 140%;
+}
+
+.storyCardShareActions {
+  display: flex;
+  width: min(328px, calc(100vw - 40px));
+  height: 136px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 24px;
+  padding: 0 43px;
+}
+
+.storyCardShareActions-ios {
+  justify-content: center;
+  gap: 88px;
+  padding: 0;
+}
+
+.storyCardShareAction {
+  display: flex;
+  width: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.storyCardShareAction:disabled {
+  opacity: 0.56;
+  cursor: default;
+}
+
+.storyCardShareActionCircle {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  background: #f6f2f4;
+}
+
+.storyCardShareActionCircle img {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.storyCardShareActionText {
+  color: #131112;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 140%;
+  white-space: nowrap;
+}
+
+.storyCardActionSpinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(19, 17, 18, 0.2);
+  border-top-color: #131112;
+  border-radius: 50%;
+  animation: storyCardActionSpin 780ms linear infinite;
+}
+
+.storyCardIntro {
+  text-align: center;
+}
+
+.storyCardIntro h2 {
+  margin: 0;
+  color: var(--Grayscale-white, #ffffff);
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 140%;
+}
+
+.storyCardIntro p {
+  margin: 4px 0 0;
+  color: var(--Grayscale-300, #cdc4c8);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 140%;
+}
+
+.storyCardDeck {
+  position: absolute;
+  top: 0;
+  right: 40px;
+  bottom: 0;
+  left: 40px;
+}
+
+.storyCardChoice {
+  position: absolute;
+  width: var(--card-width);
+  height: var(--card-height);
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  transform-origin: center;
+  transition:
+    filter 180ms ease,
+    opacity 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storyCardChoice img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 10px 18px rgba(227, 47, 137, 0.22));
+  pointer-events: none;
+}
+
+.storyCardChoice-left {
+  left: 0;
+  top: calc((100% - var(--card-height)) / 2 - clamp(70px, 9vh, 92px));
+  z-index: 1;
+  transform: rotate(-9deg);
+}
+
+.storyCardChoice-center {
+  left: 50%;
+  top: calc((100% - var(--card-height)) / 2);
+  z-index: 3;
+  transform: translateX(-50%) rotate(0deg);
+}
+
+.storyCardChoice-right {
+  right: 0;
+  top: calc((100% - var(--card-height)) / 2 + clamp(86px, 11vh, 112px));
+  z-index: 2;
+  transform: rotate(11deg);
+}
+
+.storyCardChoice:disabled {
+  cursor: default;
+}
+
+.storyCardChoice:not(:disabled):active {
+  filter: brightness(1.18);
+}
+
+.storyCardStatus {
+  min-height: 20px;
+  margin-top: clamp(10px, 2.4vh, 22px);
+  color: var(--Grayscale-300, #cdc4c8);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 140%;
+}
+
+.storyCardAnimationOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  pointer-events: none;
+}
+
+.storyCardAnimationVideo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storyCardGuideBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px 44px;
+  background: rgba(19, 17, 18, 0.70);
+}
+
+.storyCardGuideModal {
+  position: relative;
+  width: min(306px, calc(100vw - 88px));
+  aspect-ratio: 306 / 440;
+  border: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
+}
+
+.storyCardGuideImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.storyCardGuideAction {
+  position: absolute;
+  right: 5.2%;
+  bottom: 16.1%;
+  left: 5.2%;
+  height: 11.2%;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.storyCardSaveModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(19, 17, 18, 0.70);
+}
+
+.storyCardSaveModal {
+  width: min(306px, calc(100vw - 48px));
+  padding: 0 0 16px;
+  border-radius: 8px;
+  background: transparent;
+  text-align: center;
+}
+
+.storyCardSaveModal img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.storyCardSaveModal button {
+  width: 100%;
+  height: 44px;
+  margin-top: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #131112;
+  color: #ffffff;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@keyframes storyCardActionSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-height: 700px) {
+  .storyCardContent {
+    --card-height: min(196px, 29vh);
+    padding-top: 30px;
+  }
 }

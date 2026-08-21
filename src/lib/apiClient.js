@@ -43,7 +43,7 @@ async function readJson(response) {
   }
 }
 
-async function request(path, { method = 'GET', signal, authenticated }) {
+async function request(path, { method = 'GET', signal, authenticated, body: requestBody }) {
   const token = authenticated ? getWebViewAccessToken() : null
 
   if (authenticated && !token) throw new AuthenticationRequiredError()
@@ -59,6 +59,7 @@ async function request(path, { method = 'GET', signal, authenticated }) {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+      ...(requestBody !== undefined ? { body: JSON.stringify(requestBody) } : {}),
     })
   } catch (cause) {
     if (cause?.name === 'AbortError') throw cause

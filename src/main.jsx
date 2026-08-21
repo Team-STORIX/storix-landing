@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import AppEventRouter from './pages/AppEventRouter.jsx'
 import AttendanceEventPage from './pages/AttendanceEventPage.jsx'
 import DownloadLandingPage from './pages/DownloadLandingPage.jsx'
+import StoryCardEventPage from './pages/StoryCardEventPage.jsx'
 import './styles.css'
 
 function App() {
@@ -15,6 +16,10 @@ function App() {
 
   if (pathname === '/events/attendance') {
     return <AttendanceEventPage />
+  }
+
+  if (pathname === '/events/story-card') {
+    return <StoryCardEventPage />
   }
 
   return <DownloadLandingPage />
