@@ -27,8 +27,11 @@ function assertNullableCard(value) {
 
 function parseLuckyWork(value) {
   if (!value || typeof value !== 'object') return null
+  const rawWorksId = value.worksId ?? value.workId ?? value.id
+  const worksId = Number(rawWorksId)
 
   return {
+    worksId: Number.isSafeInteger(worksId) && worksId > 0 ? worksId : null,
     displayLabel: typeof value.displayLabel === 'string' ? value.displayLabel : '',
     worksType: typeof value.worksType === 'string' ? value.worksType : '',
     title: typeof value.title === 'string' ? value.title : '',
@@ -48,7 +51,16 @@ function parseStoryCard(result) {
     drawnOn: assertString(result.drawnOn, 'drawnOn'),
     alreadyDrawn: assertBoolean(result.alreadyDrawn, 'alreadyDrawn'),
     genre: assertString(result.genre, 'genre'),
-    imageUrl: typeof result.imageUrl === 'string' ? result.imageUrl : '',
+    aiImageUrl: typeof result.aiImageUrl === 'string' ? result.aiImageUrl : '',
+    backgroundImageUrl:
+      typeof result.backgroundImageUrl === 'string' ? result.backgroundImageUrl : '',
+    iconImageUrl: typeof result.iconImageUrl === 'string' ? result.iconImageUrl : '',
+    imageUrl:
+      typeof result.imageUrl === 'string'
+        ? result.imageUrl
+        : typeof result.aiImageUrl === 'string'
+          ? result.aiImageUrl
+          : '',
     message: typeof result.message === 'string' ? result.message : '',
     messageLines: Array.isArray(result.messageLines)
       ? result.messageLines.filter((line) => typeof line === 'string')
@@ -87,4 +99,35 @@ export async function drawStoryCardEvent({ signal } = {}) {
     signal,
   })
   return parseStoryCard(result)
+}
+
+export async function searchStoryCardLuckyWorkId({ keyword, worksType, signal } = {}) {
+  const trimmedKeyword = typeof keyword === 'string' ? keyword.trim() : ''
+  if (!trimmedKeyword) return null
+
+  const params = new URLSearchParams({
+    keyword: trimmedKeyword,
+    sort: 'NAME',
+    page: '0',
+  })
+
+  if (typeof worksType === 'string' && worksType.trim()) {
+    params.append('worksTypes', worksType.trim())
+  }
+
+  const result = await apiRequest(`/api/v2/search/works?${params.toString()}`, {
+    signal,
+  })
+  const page = result?.result ?? result
+  const content = Array.isArray(page?.content) ? page.content : []
+  const normalizedKeyword = trimmedKeyword.replace(/\s+/g, '').toLowerCase()
+
+  const exactMatch = content.find((item) => {
+    const worksName = typeof item?.worksName === 'string' ? item.worksName : ''
+    return worksName.replace(/\s+/g, '').toLowerCase() === normalizedKeyword
+  })
+  const candidate = exactMatch ?? content[0]
+  const worksId = Number(candidate?.worksId)
+
+  return Number.isSafeInteger(worksId) && worksId > 0 ? worksId : null
 }

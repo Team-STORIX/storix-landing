@@ -14,6 +14,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: 'Bitram';
+  src: url('/fonts/Bitram.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 .storyCardDocument,
 .storyCardDocument body,
 .storyCardDocument #root {
@@ -105,33 +113,238 @@
 }
 
 .storyCardFrontPage {
-  display: flex;
-  height: calc(100dvh - 56px);
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 24px calc(24px + env(safe-area-inset-bottom));
+  position: absolute;
+  inset: 0;
+  display: grid;
+  justify-items: center;
+  align-items: start;
+  padding: 0 35px;
   overflow: hidden;
   background: #ffffff;
 }
 
 .storyCardFront {
-  display: flex;
-  width: min(310px, calc(100vw - 48px));
-  aspect-ratio: 310 / 464;
-  align-items: center;
-  justify-content: center;
+  justify-self: center;
+  align-self: start;
+  display: grid;
+  margin-top: 96px;
+  width: min(410px, calc(100vw - 70px));
+  max-height: calc(100dvh - 176px);
+  aspect-ratio: 20 / 31;
+  grid-template-rows: 1fr auto auto;
   overflow: hidden;
-  border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 14px 40px rgba(19, 17, 18, 0.14);
+  border-radius: 20px;
+  background: transparent;
 }
 
-.storyCardFront img {
+.storyCardFrontHero {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.storyCardFrontBackgroundImage,
+.storyCardFrontAiImage {
+  position: absolute;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.storyCardFrontBackgroundImage {
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.storyCardFrontAiImage {
+  left: 50%;
+  bottom: 0;
+  width: 100%;
+  max-height: 100%;
+  border-radius: 0 0 16px 16px;
+  object-fit: contain;
+  transform: translateX(-50%);
+}
+
+.storyCardFrontIconImage {
+  position: static;
+  display: block;
+  flex: 0 0 50px;
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  user-select: none;
+  pointer-events: none;
+}
+
+.storyCardFrontBlackBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  aspect-ratio: 322 / 72;
+  padding: 0 16px;
+  border-radius: 16px 16px 0 0;
+  background: #131112;
+  color: #ffffff;
+}
+
+.storyCardFrontDateText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.storyCardFrontDateText strong,
+.storyCardFrontDateText span {
+  color: var(--Grayscale-white, #ffffff);
+  font-family: 'Bitram', 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 107%;
+  white-space: nowrap;
+}
+
+.storyCardFrontDateText strong {
+  font-size: 22px;
+}
+
+.storyCardFrontDateText span {
+  font-size: 14px;
+}
+
+.storyCardFrontBody {
+  position: relative;
+  display: block;
+  min-width: 0;
+  aspect-ratio: 322 / 229;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 0 0 16px 16px;
+  background: var(--Magenta-300, #ff7ab8);
+  color: #131112;
+  text-align: center;
+}
+
+.storyCardFrontBodyImage {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
   display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  user-select: none;
+  pointer-events: none;
+}
+
+.storyCardFrontMessage {
+  position: relative;
+  z-index: 1;
+  margin: 30px 16px 0;
+  color: var(--Grayscale-white, #ffffff);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 140%;
+}
+
+.storyCardFrontInfoRows {
+  position: absolute;
+  right: 16px;
+  bottom: 30px;
+  left: 16px;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+}
+
+.storyCardFrontInfoRow {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.storyCardFrontInfoChip {
+  display: inline-flex;
+  width: 86px;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 1px 10px 2px;
+  border-radius: 44.722px;
+  background: var(--Grayscale-black, #000000);
+  color: var(--Magenta-300, #ff4093);
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 140%;
+  white-space: nowrap;
+}
+
+.storyCardFrontInfoValue,
+.storyCardFrontLuckyWork {
+  min-width: 0;
+  color: var(--Grayscale-900, #131112);
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  line-height: 140%;
+}
+
+.storyCardFrontInfoValue {
+  justify-self: start;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.storyCardFrontLuckyWork {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 2px;
+  justify-content: flex-start;
+  max-width: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storyCardFrontLuckyWork:disabled {
+  cursor: default;
+}
+
+.storyCardFrontLuckyWork span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.storyCardFrontLuckyWork img {
+  display: block;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .storyCardFrontFallback {
@@ -161,13 +374,42 @@
   line-height: 140%;
 }
 
+.storyCardNativeCaptureMode .storyCardTopBar,
+.storyCardNativeCaptureMode .storyCardShareActions,
+.storyCardNativeCaptureMode .storyCardGuideBackdrop,
+.storyCardNativeCaptureMode .storyCardSaveModalBackdrop {
+  display: none !important;
+}
+
+.storyCardNativeCaptureMode .storyCardEventPage {
+  background: #ffffff;
+}
+
+.storyCardNativeCaptureMode .storyCardFrontPage {
+  position: fixed;
+  inset: 0 auto auto 0;
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  background: #ffffff;
+}
+
+.storyCardNativeCaptureMode .storyCardFront {
+  margin: 0;
+}
+
 .storyCardShareActions {
+  position: absolute;
+  right: 0;
+  bottom: calc(10px + env(safe-area-inset-bottom));
+  left: 0;
   display: flex;
   width: min(328px, calc(100vw - 40px));
   height: 136px;
   align-items: center;
   justify-content: space-between;
-  margin-top: 24px;
+  margin: 0 auto;
   padding: 0 43px;
 }
 
@@ -192,7 +434,7 @@
 }
 
 .storyCardShareAction:disabled {
-  opacity: 0.56;
+  /* 버튼 클릭 중에도 시각적 변화 없음 */
   cursor: default;
 }
 
@@ -203,13 +445,14 @@
   align-items: center;
   justify-content: center;
   border-radius: 24px;
-  background: #f6f2f4;
+  background: #131112;
 }
 
 .storyCardShareActionCircle img {
   display: block;
   width: 24px;
   height: 24px;
+  filter: brightness(0) invert(1);
 }
 
 .storyCardShareActionText {
@@ -360,7 +603,7 @@
 .storyCardGuideModal {
   position: relative;
   width: min(306px, calc(100vw - 88px));
-  aspect-ratio: 306 / 440;
+  aspect-ratio: 3 / 4;
   border: 0;
   border-radius: 6px;
   overflow: hidden;
@@ -372,7 +615,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .storyCardGuideAction {
@@ -395,35 +638,54 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 24px 35px;
   background: rgba(19, 17, 18, 0.70);
 }
 
 .storyCardSaveModal {
-  width: min(306px, calc(100vw - 48px));
-  padding: 0 0 16px;
+  width: min(306px, calc(100vw - 70px));
+  padding: 28px 20px 16px;
   border-radius: 8px;
-  background: transparent;
+  background: #ffffff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.28);
   text-align: center;
 }
 
-.storyCardSaveModal img {
-  display: block;
-  width: 100%;
-  height: auto;
+.storyCardSaveModal h2 {
+  margin: 0;
+  color: var(--Grayscale-900, #131112);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 20px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 140%;
+}
+
+.storyCardSaveModal p {
+  margin: 8px 0 0;
+  color: var(--Grayscale-600, #7d7478);
+  text-align: center;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 140%;
 }
 
 .storyCardSaveModal button {
   width: 100%;
-  height: 44px;
-  margin-top: 12px;
+  height: 48px;
+  margin-top: 24px;
   border: 0;
   border-radius: 8px;
   background: #131112;
   color: #ffffff;
   font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
-  font-size: 15px;
+  font-size: 16px;
+  font-style: normal;
   font-weight: 700;
+  line-height: 140%;
   cursor: pointer;
 }
 
