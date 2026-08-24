@@ -20,6 +20,19 @@ const DEFAULT_BY_TYPE = {
   STORY_CARD: StoryCardEventPage,
 };
 
+const STATIC_EVENTS = {
+  7: {
+    id: 7,
+    name: "오늘의 스토리카드",
+    description: "오늘의 스토리 카드 이벤트",
+    eventType: "STORY_CARD",
+    pageKey: "story-card",
+    startAt: "",
+    endAt: "",
+    status: "ACTIVE",
+  },
+};
+
 function closeEventPage() {
   if (isStorixWebView()) {
     postStorixWebViewMessage({ type: "CLOSE_WEBVIEW" });
@@ -119,6 +132,12 @@ export default function AppEventRouter({ appEventId }) {
   });
 
   useEffect(() => {
+    const staticEvent = STATIC_EVENTS[appEventId];
+    if (staticEvent) {
+      setState({ status: "ready", event: staticEvent, error: null });
+      return undefined;
+    }
+
     const controller = new AbortController();
     setState({ status: "loading", event: null, error: null });
 

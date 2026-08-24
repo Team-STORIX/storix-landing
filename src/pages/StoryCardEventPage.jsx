@@ -17,7 +17,7 @@ import '../story-card-event.css'
 
 const STORY_CARD_CHOICES = [
   { key: 'left', label: '왼쪽 카드', videoSrc: '/events/story-card/left.mp4' },
-  { key: 'center', label: '가운데 카드', videoSrc: '/events/story-card/center.mp4' },
+  { key: 'center', label: '가운데 카드', videoSrc: '/events/story-card/centre.mp4' },
   { key: 'right', label: '오른쪽 카드', videoSrc: '/events/story-card/right.mp4' },
 ]
 
