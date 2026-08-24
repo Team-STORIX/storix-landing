@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  getWebViewAccessToken,
   getWebViewAuthSnapshot,
   subscribeToWebViewAuth,
 } from '../lib/webViewAuth.js'
@@ -10,6 +9,7 @@ import {
 } from '../lib/webViewBridge.js'
 import {
   drawStoryCardEvent,
+  getAppEventModalRequired,
   getStoryCardEventStatus,
   searchStoryCardLuckyWorkId,
 } from '../features/story-card-event/api.js'
@@ -29,22 +29,6 @@ function closeEventPage() {
   }
 
   window.location.assign('/')
-}
-
-function getGuideSeen(key) {
-  try {
-    return window.localStorage.getItem(key) === 'true'
-  } catch {
-    return false
-  }
-}
-
-function setGuideSeen(key) {
-  try {
-    window.localStorage.setItem(key, 'true')
-  } catch {
-    // Ignore storage failures; the upcoming account-level API will own this.
-  }
 }
 
 function decodeBase64Url(value) {
@@ -739,6 +723,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const [saveModalVisible, setSaveModalVisible] = useState(false)
   const drawControllerRef = useRef(null)
   const statusControllerRef = useRef(null)
+  const modalRequiredControllerRef = useRef(null)
   const animationEndedRef = useRef(false)
   const drawFailedRef = useRef(false)
   const isIOS = isIOSDevice()
@@ -751,6 +736,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     () => () => {
       drawControllerRef.current?.abort()
       statusControllerRef.current?.abort()
+      modalRequiredControllerRef.current?.abort()
     },
     [],
   )
@@ -760,14 +746,13 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     [selectedChoice],
   )
 
-  const guideStorageKey = useMemo(() => {
-    const eventKey = appEventId ?? event?.id ?? event?.pageKey ?? 'default'
-    const accountKey = getAccountStorageKeyPart(getWebViewAccessToken())
-    return `storix:story-card-guide-seen:${accountKey}:${eventKey}`
-  }, [appEventId, event?.id, event?.pageKey, authSnapshot.version])
+  const normalizedAppEventId = useMemo(() => {
+    const eventId = Number(appEventId ?? event?.id)
+    return Number.isSafeInteger(eventId) && eventId > 0 ? eventId : null
+  }, [appEventId, event?.id])
 
-  const [showGuide, setShowGuide] = useState(() => !getGuideSeen(guideStorageKey))
-  const [entered, setEntered] = useState(() => getGuideSeen(guideStorageKey))
+  const [showGuide, setShowGuide] = useState(false)
+  const [entered, setEntered] = useState(false)
   const [guideMode, setGuideMode] = useState('entry')
 
   useEffect(() => {
@@ -782,11 +767,50 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }, [])
 
   useEffect(() => {
-    const seen = getGuideSeen(guideStorageKey)
-    setShowGuide(!seen)
-    setEntered(seen)
     setGuideMode('entry')
-  }, [guideStorageKey])
+    setShowGuide(false)
+    setEntered(false)
+    setSelectedChoice(null)
+    setDrawStatus('idle')
+    setDrawnCard(null)
+    animationEndedRef.current = false
+    drawFailedRef.current = false
+
+    modalRequiredControllerRef.current?.abort()
+
+    if (!normalizedAppEventId) {
+      setEntered(true)
+      return undefined
+    }
+
+    if (!authSnapshot.authenticated) {
+      if (!isStorixWebView()) {
+        setEntered(true)
+      }
+      return undefined
+    }
+
+    const controller = new AbortController()
+    modalRequiredControllerRef.current = controller
+
+    getAppEventModalRequired(normalizedAppEventId, { signal: controller.signal })
+      .then(({ modalRequired }) => {
+        setShowGuide(modalRequired)
+        setEntered(!modalRequired)
+      })
+      .catch((error) => {
+        if (error?.name === 'AbortError') return
+        setShowGuide(false)
+        setEntered(true)
+      })
+      .finally(() => {
+        if (modalRequiredControllerRef.current === controller) {
+          modalRequiredControllerRef.current = null
+        }
+      })
+
+    return () => controller.abort()
+  }, [normalizedAppEventId, authSnapshot.authenticated, authSnapshot.version])
 
   useEffect(() => {
     if (!entered) return undefined
@@ -819,7 +843,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       return
     }
 
-    setGuideSeen(guideStorageKey)
     setShowGuide(false)
     setEntered(true)
   }
@@ -830,7 +853,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       return
     }
 
-    setGuideSeen(guideStorageKey)
     setShowGuide(false)
     setEntered(true)
   }

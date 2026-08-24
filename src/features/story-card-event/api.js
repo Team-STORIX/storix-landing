@@ -88,6 +88,32 @@ function parseStoryCardStatus(result) {
   }
 }
 
+function parseModalRequired(result) {
+  if (!result || typeof result !== 'object') {
+    throw new ApiError('스토리 카드 안내 모달 응답이 올바르지 않습니다.', {
+      code: 'INVALID_RESPONSE',
+    })
+  }
+
+  return {
+    modalRequired: assertBoolean(result.modalRequired, 'modalRequired'),
+  }
+}
+
+export async function getAppEventModalRequired(appEventId, { signal } = {}) {
+  const eventId = Number(appEventId)
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) {
+    throw new ApiError('앱 이벤트 ID가 올바르지 않습니다.', {
+      code: 'INVALID_APP_EVENT_ID',
+    })
+  }
+
+  const result = await apiRequest(`/api/v1/app-events/${eventId}/modal-required`, {
+    signal,
+  })
+  return parseModalRequired(result)
+}
+
 export async function getStoryCardEventStatus({ signal } = {}) {
   const result = await apiRequest('/api/v1/story-card-event', { signal })
   return parseStoryCardStatus(result)
