@@ -135,6 +135,14 @@ function parseStoryCardStatus(result) {
     })
   }
 
+  const card =
+    result.card ??
+    result.storyCard ??
+    result.storyCardResult ??
+    result.drawnCard ??
+    result.data ??
+    null
+
   return {
     appEventId: typeof result.appEventId === 'number' ? result.appEventId : null,
     eventStartDate: assertString(result.eventStartDate, 'eventStartDate'),
@@ -142,7 +150,7 @@ function parseStoryCardStatus(result) {
     serviceDate: assertString(result.serviceDate, 'serviceDate'),
     eventActive: assertBoolean(result.eventActive, 'eventActive'),
     drawnToday: assertBoolean(result.drawnToday, 'drawnToday'),
-    card: assertNullableCard(result.card),
+    card: assertNullableCard(card),
   }
 }
 
