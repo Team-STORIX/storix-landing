@@ -57,6 +57,24 @@ function getImageCandidates(value) {
     .filter(Boolean)
 }
 
+function unwrapStoryCardResult(result) {
+  if (!result || typeof result !== 'object') return result
+
+  const nested =
+    result.card ??
+    result.storyCard ??
+    result.storyCardResult ??
+    result.drawnCard ??
+    result.data
+
+  return nested && typeof nested === 'object'
+    ? {
+        ...result,
+        ...nested,
+      }
+    : result
+}
+
 function assertNullableCard(value) {
   if (value == null) return null
   return parseStoryCard(value)
@@ -78,33 +96,35 @@ function parseLuckyWork(value) {
 }
 
 function parseStoryCard(result) {
-  if (!result || typeof result !== 'object') {
+  const cardResult = unwrapStoryCardResult(result)
+
+  if (!cardResult || typeof cardResult !== 'object') {
     throw new ApiError('스토리 카드 응답이 올바르지 않습니다.', {
       code: 'INVALID_RESPONSE',
     })
   }
 
-  const imageCandidates = getImageCandidates(result)
-  const drawnOn = pickString(result, ['drawnOn', 'drawDate', 'drawnDate', 'serviceDate', 'date', 'createdAt'])
-  const genre = pickString(result, ['genre', 'genreName', 'category', 'categoryName'])
-  const immersion = pickString(result, ['immersion', 'immersionLevel', 'immersionPower', 'mood'])
+  const imageCandidates = getImageCandidates(cardResult)
+  const drawnOn = pickString(cardResult, ['drawnOn', 'drawDate', 'drawnDate', 'serviceDate', 'date', 'createdAt'])
+  const genre = pickString(cardResult, ['genre', 'genreName', 'category', 'categoryName'])
+  const immersion = pickString(cardResult, ['immersion', 'immersionLevel', 'immersionPower', 'mood'])
 
   return {
     drawnOn,
-    alreadyDrawn: pickBoolean(result, ['alreadyDrawn', 'drawnToday', 'isDrawn'], true),
+    alreadyDrawn: pickBoolean(cardResult, ['alreadyDrawn', 'drawnToday', 'isDrawn'], true),
     genre,
-    aiImageUrl: pickString(result, ['aiImageUrl', 'mainImageUrl', 'imageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
+    aiImageUrl: pickString(cardResult, ['aiImageUrl', 'mainImageUrl', 'imageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
     backgroundImageUrl:
-      pickString(result, ['backgroundImageUrl', 'backgroundUrl', 'bgImageUrl']) || imageCandidates[1] || '',
-    iconImageUrl: pickString(result, ['iconImageUrl', 'iconUrl', 'badgeImageUrl']) || imageCandidates[2] || '',
+      pickString(cardResult, ['backgroundImageUrl', 'backgroundUrl', 'bgImageUrl']) || imageCandidates[1] || '',
+    iconImageUrl: pickString(cardResult, ['iconImageUrl', 'iconUrl', 'badgeImageUrl']) || imageCandidates[2] || '',
     imageUrl:
-      pickString(result, ['imageUrl', 'aiImageUrl', 'mainImageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
-    message: pickString(result, ['message', 'description', 'summary']),
-    messageLines: Array.isArray(result.messageLines)
-      ? result.messageLines.filter((line) => typeof line === 'string')
+      pickString(cardResult, ['imageUrl', 'aiImageUrl', 'mainImageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
+    message: pickString(cardResult, ['message', 'description', 'summary']),
+    messageLines: Array.isArray(cardResult.messageLines)
+      ? cardResult.messageLines.filter((line) => typeof line === 'string')
       : [],
     immersion,
-    luckyWork: parseLuckyWork(result.luckyWork ?? result.work ?? result.works ?? result.recommendedWork),
+    luckyWork: parseLuckyWork(cardResult.luckyWork ?? cardResult.work ?? cardResult.works ?? cardResult.recommendedWork),
   }
 }
 
