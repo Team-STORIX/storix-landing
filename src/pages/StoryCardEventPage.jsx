@@ -800,17 +800,8 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       })
       .catch((error) => {
         if (error?.name === 'AbortError') return
-        if (error?.status === 401) {
-          postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
-          return
-        }
-        postStorixWebViewMessage({
-          type: 'EVENT_ERROR',
-          payload: {
-            code: error?.code,
-            message: `이벤트 안내 상태 조회 실패${error?.status ? ` (${error.status})` : ''}`,
-          },
-        })
+        setShowGuide(false)
+        setEntered(true)
       })
       .finally(() => {
         if (modalRequiredControllerRef.current === controller) {
