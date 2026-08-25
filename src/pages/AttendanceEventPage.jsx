@@ -140,7 +140,7 @@ export default function AttendanceEventPage({ appEventId = null }) {
 
   const handleBack = () => {
     if (isStorixWebView()) {
-      postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
+      postStorixWebViewMessage({ type: 'GO_HOME' })
       return
     }
 
