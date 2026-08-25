@@ -6,6 +6,7 @@ import {
   subscribeToWebViewAuth,
 } from '../lib/webViewAuth.js'
 import {
+  isStorixWebView,
   postStorixWebViewMessage,
 } from '../lib/webViewBridge.js'
 import {
@@ -138,6 +139,11 @@ export default function AttendanceEventPage({ appEventId = null }) {
     status.attendedToday
 
   const handleBack = () => {
+    if (isStorixWebView()) {
+      postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
+      return
+    }
+
     if (window.history.length > 1) {
       window.history.back()
       return
