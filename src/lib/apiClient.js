@@ -7,15 +7,15 @@ const viteEnv = import.meta.env || {}
 
 const DEFAULT_API_BASE_URL = viteEnv.DEV
   ? 'https://dev.storix.kr'
-  : 'https://api.storix.kr'
+  : '/api/prod'
 
 // URL 쿼리로 API 서버 오버라이드 가능 (예: ?api=dev)
 function getApiBaseUrl() {
   const params = new URLSearchParams(window.location.search)
   const apiParam = params.get('api')
 
-  if (apiParam === 'dev') return 'https://dev.storix.kr'
-  if (apiParam === 'prod') return 'https://api.storix.kr'
+  if (apiParam === 'dev') return viteEnv.DEV ? 'https://dev.storix.kr' : '/api/dev'
+  if (apiParam === 'prod') return viteEnv.DEV ? 'https://api.storix.kr' : '/api/prod'
 
   return (viteEnv.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
 }
