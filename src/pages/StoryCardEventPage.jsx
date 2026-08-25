@@ -94,7 +94,7 @@ function createFallbackStoryCard() {
 function formatStoryCardDate(value) {
   if (typeof value !== 'string' || !value.trim()) return ''
 
-  const [year, month, day] = value.trim().split('-').map(Number)
+  const [year, month, day] = value.trim().slice(0, 10).split('-').map(Number)
   if (!year || !month || !day) return ''
 
   const date = new Date(year, month - 1, day)
@@ -907,6 +907,11 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     }
   }
 
+  const handleAnimationUnavailable = () => {
+    if (animationEndedRef.current) return
+    handleAnimationEnded()
+  }
+
   const captureCard = async () => {
     // ✅ Canvas 렌더링 방식만 사용 (DOM 변경 없음)
     try {
@@ -1202,7 +1207,10 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
             muted
             playsInline
             preload="auto"
+            webkit-playsinline="true"
             onEnded={handleAnimationEnded}
+            onError={handleAnimationUnavailable}
+            onStalled={handleAnimationUnavailable}
           />
         </div>
       ) : null}
