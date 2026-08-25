@@ -9,6 +9,13 @@ const DEFAULT_API_BASE_URL = viteEnv.DEV
   ? 'https://dev.storix.kr'
   : '/api/prod'
 
+function isDevPreviewHost() {
+  if (typeof window === 'undefined') return false
+
+  const hostname = window.location.hostname.toLowerCase()
+  return hostname.includes('-git-dev-')
+}
+
 // URL 쿼리로 API 서버 오버라이드 가능 (예: ?api=dev)
 function getApiBaseUrl() {
   const params = new URLSearchParams(window.location.search)
@@ -17,7 +24,10 @@ function getApiBaseUrl() {
   if (apiParam === 'dev') return viteEnv.DEV ? 'https://dev.storix.kr' : '/api/dev'
   if (apiParam === 'prod') return viteEnv.DEV ? 'https://api.storix.kr' : '/api/prod'
 
-  return (viteEnv.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+  if (viteEnv.VITE_API_BASE_URL) return viteEnv.VITE_API_BASE_URL.replace(/\/$/, '')
+  if (isDevPreviewHost()) return '/api/dev'
+
+  return DEFAULT_API_BASE_URL.replace(/\/$/, '')
 }
 
 const API_BASE_URL = getApiBaseUrl()
