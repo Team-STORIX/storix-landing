@@ -895,8 +895,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       }
     } catch (error) {
       drawFailedRef.current = true
-      setSelectedChoice(null)
-      setDrawStatus('idle')
       if (error?.status === 401) {
         postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
       } else {
@@ -909,7 +907,9 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
         })
       }
       if (animationEndedRef.current) {
+        setSelectedChoice(null)
         setDrawnCard(null)
+        setDrawStatus('idle')
       }
     } finally {
       if (drawControllerRef.current === controller) {
