@@ -13,7 +13,7 @@ function isDevPreviewHost() {
   if (typeof window === 'undefined') return false
 
   const hostname = window.location.hostname.toLowerCase()
-  return hostname.includes('-git-dev-')
+  return hostname === 'www-dev.storix.kr' || hostname.includes('-git-dev-')
 }
 
 // URL 쿼리로 API 서버 오버라이드 가능 (예: ?api=dev)
