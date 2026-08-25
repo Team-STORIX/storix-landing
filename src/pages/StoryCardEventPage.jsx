@@ -893,11 +893,23 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       if (animationEndedRef.current) {
         setDrawStatus('done')
       }
-    } catch {
+    } catch (error) {
       drawFailedRef.current = true
+      setSelectedChoice(null)
+      setDrawStatus('idle')
+      if (error?.status === 401) {
+        postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
+      } else {
+        postStorixWebViewMessage({
+          type: 'EVENT_ERROR',
+          payload: {
+            code: error?.code,
+            message: `스토리카드 발급 실패${error?.status ? ` (${error.status})` : ''}`,
+          },
+        })
+      }
       if (animationEndedRef.current) {
-        setDrawnCard(createFallbackStoryCard())
-        setDrawStatus('done')
+        setDrawnCard(null)
       }
     } finally {
       if (drawControllerRef.current === controller) {
@@ -910,8 +922,9 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     animationEndedRef.current = true
 
     if (drawFailedRef.current) {
-      setDrawnCard(createFallbackStoryCard())
-      setDrawStatus('done')
+      setSelectedChoice(null)
+      setDrawnCard(null)
+      setDrawStatus('idle')
       return
     }
 
