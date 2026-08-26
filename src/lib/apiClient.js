@@ -1,7 +1,9 @@
 import {
   clearWebViewAccessToken,
   getWebViewAccessToken,
+  waitForWebViewAccessToken,
 } from './webViewAuth.js'
+import { postStorixWebViewMessage } from './webViewBridge.js'
 
 const viteEnv = import.meta.env || {}
 
@@ -31,6 +33,7 @@ function getApiBaseUrl() {
 }
 
 const API_BASE_URL = getApiBaseUrl()
+let tokenRefreshPromise = null
 
 export class ApiError extends Error {
   constructor(message, { status, code, cause } = {}) {
@@ -46,6 +49,28 @@ export class AuthenticationRequiredError extends ApiError {
     super('로그인이 필요합니다.', { status: 401, code: 'AUTH_REQUIRED' })
     this.name = 'AuthenticationRequiredError'
   }
+}
+
+async function requestAccessTokenRefresh({ expiredToken, signal }) {
+  if (!tokenRefreshPromise) {
+    const sent = postStorixWebViewMessage({ type: 'TOKEN_EXPIRED' })
+
+    if (!sent) {
+      clearWebViewAccessToken()
+      throw new AuthenticationRequiredError()
+    }
+
+    clearWebViewAccessToken()
+    tokenRefreshPromise = waitForWebViewAccessToken({
+      previousToken: expiredToken,
+      signal,
+      timeoutMs: 10000,
+    }).finally(() => {
+      tokenRefreshPromise = null
+    })
+  }
+
+  return tokenRefreshPromise
 }
 
 async function readJson(response) {
@@ -64,7 +89,7 @@ async function readJson(response) {
   }
 }
 
-async function request(path, { method = 'GET', signal, authenticated, body: requestBody }) {
+async function request(path, { method = 'GET', signal, authenticated, body: requestBody, retriedAuth = false }) {
   const token = authenticated ? getWebViewAccessToken() : null
 
   if (authenticated && !token) throw new AuthenticationRequiredError()
@@ -94,8 +119,15 @@ async function request(path, { method = 'GET', signal, authenticated, body: requ
   const body = await readJson(response)
 
   if (!response.ok || body?.isSuccess === false) {
-    if (authenticated && response.status === 401) {
-      clearWebViewAccessToken()
+    if (authenticated && response.status === 401 && !retriedAuth) {
+      await requestAccessTokenRefresh({ expiredToken: token, signal })
+      return request(path, {
+        method,
+        signal,
+        authenticated,
+        body: requestBody,
+        retriedAuth: true,
+      })
     }
 
     throw new ApiError(body?.message || '요청을 처리하지 못했습니다.', {
