@@ -656,111 +656,11 @@
 .storyCardGuideModal-result {
   width: min(306px, calc(100vw - 88px));
   aspect-ratio: 3 / 4;
-  max-height: calc(100dvh - 40px);
-  padding: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  color: #131112;
-  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
-  text-align: center;
 }
 
-.storyCardGuideResultContent {
-  width: 1224px;
-  height: 1632px;
-  box-sizing: border-box;
-  padding: 100px 64px 48px;
-  transform: scale(0.25);
-  transform-origin: top left;
-}
-
-.storyCardGuideTitle {
-  margin: 0;
-  color: #131112;
-  font-size: 88px;
-  font-weight: 700;
-  line-height: 130%;
-}
-
-.storyCardGuideLead {
-  margin: 40px 0 0;
-  color: #877f83;
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 135%;
-}
-
-.storyCardGuideList {
-  display: flex;
-  flex-direction: column;
-  gap: 48px;
-  margin-top: 88px;
-  text-align: left;
-}
-
-.storyCardGuideItem {
-  display: grid;
-  grid-template-columns: 112px minmax(0, 1fr);
-  column-gap: 32px;
-  align-items: start;
-}
-
-.storyCardGuideItemIcon {
-  display: inline-flex;
-  width: 112px;
-  height: 112px;
-  align-items: flex-start;
-  justify-content: center;
-  color: #ff78ae;
-}
-
-.storyCardGuideItemIcon svg {
-  width: 96px;
-  height: 96px;
-}
-
-.storyCardGuideItem h3 {
-  margin: 0;
-  color: #131112;
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 140%;
-}
-
-.storyCardGuideItem p {
-  margin: 16px 0 0;
-  color: #877f83;
-  font-size: 46px;
-  font-weight: 700;
-  line-height: 140%;
-}
-
-.storyCardGuideConfirm {
-  display: flex;
-  width: 100%;
-  height: 176px;
-  align-items: center;
-  justify-content: center;
-  margin-top: 72px;
-  padding: 0;
-  border: 0;
-  border-radius: 32px;
-  background: #131112;
-  color: #ffffff;
-  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
-  font-size: 72px;
-  font-weight: 700;
-  line-height: 100%;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.storyCardGuideNotice {
-  margin: 32px 0 0;
-  color: #b7afb3;
-  font-size: 40px;
-  font-weight: 700;
-  line-height: 140%;
+.storyCardGuideAction-result {
+  bottom: 9.3%;
+  height: 12%;
 }
 
 .storyCardSaveModalBackdrop {
