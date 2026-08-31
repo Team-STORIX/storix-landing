@@ -22,6 +22,25 @@ const STORY_CARD_CHOICES = [
   { key: 'right', label: '오른쪽 카드', videoSrc: '/events/story-card/right.mp4' },
 ]
 
+const preloadedVideoSources = new Set()
+
+function preloadStoryCardVideo(src) {
+  if (typeof document === 'undefined' || preloadedVideoSources.has(src)) return
+
+  preloadedVideoSources.add(src)
+  const link = document.createElement('link')
+  link.rel = 'preload'
+  link.as = 'video'
+  link.href = src
+  document.head.appendChild(link)
+}
+
+function waitForAnimationFrame() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve())
+  })
+}
+
 function closeEventPage() {
   if (isStorixWebView()) {
     postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
@@ -923,6 +942,11 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     return () => controller.abort()
   }, [entered, authSnapshot.version])
 
+  useEffect(() => {
+    if (!entered || drawnCard) return
+    STORY_CARD_CHOICES.forEach((choice) => preloadStoryCardVideo(choice.videoSrc))
+  }, [entered, drawnCard])
+
   const handleBackdropClick = () => {
     if (guideMode === 'help') {
       setShowGuide(false)
@@ -961,6 +985,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     drawFailedRef.current = false
 
     try {
+      await waitForAnimationFrame()
       const nextCard = await drawStoryCardEvent({ signal: controller.signal })
       setDrawnCard(nextCard)
       if (animationEndedRef.current) {
@@ -1172,6 +1197,19 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                   aria-hidden="true"
                 />
               </button>
+            ))}
+          </div>
+
+          <div className="storyCardVideoPreload" aria-hidden="true">
+            {STORY_CARD_CHOICES.map((choice) => (
+              <video
+                key={choice.videoSrc}
+                src={choice.videoSrc}
+                muted
+                playsInline
+                preload="auto"
+                webkit-playsinline="true"
+              />
             ))}
           </div>
         </section>
