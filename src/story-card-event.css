@@ -312,6 +312,7 @@
 
 .storyCardFrontInfoValue {
   justify-self: start;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;

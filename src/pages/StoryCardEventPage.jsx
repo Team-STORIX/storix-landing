@@ -255,7 +255,7 @@ async function resolveCanvasImageSources(card) {
     aiImage: card.aiImageUrl?.trim() || card.imageUrl?.trim() || '',
     bodyBackground: card.backgroundImageUrl?.trim() || '',
     iconImage: card.iconImageUrl?.trim() || '',
-    arrowImage: '/events/story-card/icon-arrow-forward-xsmall.png',
+    arrowImage: '/events/story-card/icon-arrow-forward-xsmall.svg',
   }
 
   console.log('[story-card] Image sources', {
@@ -664,7 +664,7 @@ async function createStoryCardShareImage(card) {
     const valueX = chipX + renderedChipWidth + chipValueGap
     // CSS 고정값: arrow width 16px
     const arrowSize = index === 2 && arrowImage ? 16 * pixelRatio : 0
-    const maxValueWidth = width - horizontalPadding - valueX - arrowSize
+    const maxValueWidth = width - horizontalPadding - valueX - arrowSize - (arrowSize > 0 ? 2 * pixelRatio : 0)
     ctx.fillStyle = '#131112'
     ctx.font = valueFont
     ctx.textAlign = 'left'
@@ -1129,7 +1129,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           onClick={closeEventPage}
         >
           <img
-            src={showCardFront ? '/events/story-card/icon-x.png' : '/events/story-card/icon-arrow-back.svg'}
+            src={showCardFront ? '/events/story-card/icon-x.svg' : '/events/story-card/icon-arrow-back.svg'}
             alt=""
             aria-hidden="true"
           />
@@ -1248,7 +1248,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                     <span>{luckyWorkLabel || '-'}</span>
                     {luckyWorkLabel ? (
                       <img
-                        src="/events/story-card/icon-arrow-forward-xsmall.png"
+                        src="/events/story-card/icon-arrow-forward-xsmall.svg"
                         alt=""
                         aria-hidden="true"
                       />
