@@ -657,27 +657,35 @@
   width: min(306px, calc(100vw - 88px));
   aspect-ratio: 3 / 4;
   max-height: calc(100dvh - 40px);
-  padding: 25px 16px 12px;
+  padding: 0;
   border-radius: 6px;
-  box-sizing: border-box;
   overflow: hidden;
   color: #131112;
   font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
   text-align: center;
 }
 
+.storyCardGuideResultContent {
+  width: 1224px;
+  height: 1632px;
+  box-sizing: border-box;
+  padding: 100px 64px 48px;
+  transform: scale(0.25);
+  transform-origin: top left;
+}
+
 .storyCardGuideTitle {
   margin: 0;
   color: #131112;
-  font-size: 22px;
+  font-size: 88px;
   font-weight: 700;
   line-height: 130%;
 }
 
 .storyCardGuideLead {
-  margin: 10px 0 0;
+  margin: 40px 0 0;
   color: #877f83;
-  font-size: 14px;
+  font-size: 56px;
   font-weight: 700;
   line-height: 135%;
 }
@@ -685,44 +693,44 @@
 .storyCardGuideList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 22px;
+  gap: 48px;
+  margin-top: 88px;
   text-align: left;
 }
 
 .storyCardGuideItem {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  column-gap: 8px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  column-gap: 32px;
   align-items: start;
 }
 
 .storyCardGuideItemIcon {
   display: inline-flex;
-  width: 28px;
-  height: 28px;
+  width: 112px;
+  height: 112px;
   align-items: flex-start;
   justify-content: center;
   color: #ff78ae;
 }
 
 .storyCardGuideItemIcon svg {
-  width: 24px;
-  height: 24px;
+  width: 96px;
+  height: 96px;
 }
 
 .storyCardGuideItem h3 {
   margin: 0;
   color: #131112;
-  font-size: 14px;
+  font-size: 56px;
   font-weight: 700;
   line-height: 140%;
 }
 
 .storyCardGuideItem p {
-  margin: 4px 0 0;
+  margin: 16px 0 0;
   color: #877f83;
-  font-size: 11.5px;
+  font-size: 46px;
   font-weight: 700;
   line-height: 140%;
 }
@@ -730,17 +738,17 @@
 .storyCardGuideConfirm {
   display: flex;
   width: 100%;
-  height: 44px;
+  height: 176px;
   align-items: center;
   justify-content: center;
-  margin-top: 18px;
+  margin-top: 72px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 32px;
   background: #131112;
   color: #ffffff;
   font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
-  font-size: 18px;
+  font-size: 72px;
   font-weight: 700;
   line-height: 100%;
   cursor: pointer;
@@ -748,9 +756,9 @@
 }
 
 .storyCardGuideNotice {
-  margin: 8px 0 0;
+  margin: 32px 0 0;
   color: #b7afb3;
-  font-size: 10px;
+  font-size: 40px;
   font-weight: 700;
   line-height: 140%;
 }

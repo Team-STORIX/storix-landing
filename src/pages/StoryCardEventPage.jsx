@@ -1369,51 +1369,53 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
               aria-label="오늘의 스토리 카드 안내"
               onClick={(clickEvent) => clickEvent.stopPropagation()}
             >
-              <h2 className="storyCardGuideTitle">오늘의 스토리 카드</h2>
-              <p className="storyCardGuideLead">
-                장르와 한마디, 행운의 작품을
-                <br />
-                카드 한 장에 담았어요.
-              </p>
+              <div className="storyCardGuideResultContent">
+                <h2 className="storyCardGuideTitle">오늘의 스토리 카드</h2>
+                <p className="storyCardGuideLead">
+                  장르와 한마디, 행운의 작품을
+                  <br />
+                  카드 한 장에 담았어요.
+                </p>
 
-              <div className="storyCardGuideList">
-                <div className="storyCardGuideItem">
-                  <span className="storyCardGuideItemIcon">
-                    <StoryCardGuideIcon type="sparkle" />
-                  </span>
-                  <div>
-                    <h3>세 장 중 한 장을 골라요</h3>
-                    <p>끌리는 카드를 열면 오늘의 이야기가 펼쳐져요.</p>
+                <div className="storyCardGuideList">
+                  <div className="storyCardGuideItem">
+                    <span className="storyCardGuideItemIcon">
+                      <StoryCardGuideIcon type="sparkle" />
+                    </span>
+                    <div>
+                      <h3>세 장 중 한 장을 골라요</h3>
+                      <p>끌리는 카드를 열면 오늘의 이야기가 펼쳐져요.</p>
+                    </div>
+                  </div>
+                  <div className="storyCardGuideItem">
+                    <span className="storyCardGuideItemIcon">
+                      <StoryCardGuideIcon type="megaphone" />
+                    </span>
+                    <div>
+                      <h3>매일 아침 새로운 카드가 와요</h3>
+                      <p>
+                        오전 6시에 바뀌어요.
+                        <br />
+                        그전까지 오늘 카드는 언제든 다시 볼 수 있어요.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="storyCardGuideItem">
+                    <span className="storyCardGuideItemIcon">
+                      <StoryCardGuideIcon type="book" />
+                    </span>
+                    <div>
+                      <h3>행운의 작품도 만나보세요</h3>
+                      <p>작품명을 누르면 작품 정보와 독자 리뷰를 볼 수 있어요.</p>
+                    </div>
                   </div>
                 </div>
-                <div className="storyCardGuideItem">
-                  <span className="storyCardGuideItemIcon">
-                    <StoryCardGuideIcon type="megaphone" />
-                  </span>
-                  <div>
-                    <h3>매일 아침 새로운 카드가 와요</h3>
-                    <p>
-                      오전 6시에 바뀌어요.
-                      <br />
-                      그전까지 오늘 카드는 언제든 다시 볼 수 있어요.
-                    </p>
-                  </div>
-                </div>
-                <div className="storyCardGuideItem">
-                  <span className="storyCardGuideItemIcon">
-                    <StoryCardGuideIcon type="book" />
-                  </span>
-                  <div>
-                    <h3>행운의 작품도 만나보세요</h3>
-                    <p>작품명을 누르면 작품 정보와 독자 리뷰를 볼 수 있어요.</p>
-                  </div>
-                </div>
+
+                <button className="storyCardGuideConfirm" type="button" onClick={handleStartClick}>
+                  확인
+                </button>
+                <p className="storyCardGuideNotice">이미지는 생성형 AI를 활용해 제작되었습니다.</p>
               </div>
-
-              <button className="storyCardGuideConfirm" type="button" onClick={handleStartClick}>
-                확인
-              </button>
-              <p className="storyCardGuideNotice">이미지는 생성형 AI를 활용해 제작되었습니다.</p>
             </section>
           ) : (
             <section
