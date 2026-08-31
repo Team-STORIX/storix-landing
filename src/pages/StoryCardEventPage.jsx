@@ -1325,7 +1325,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
             >
               <img
                 className="storyCardGuideImage"
-                src="/events/story-card/popup-ok.png?v=20260901"
+                src="/events/story-card/popup-ok.png?v=20260901b"
                 alt="오늘의 스토리 카드 안내"
               />
               <button
