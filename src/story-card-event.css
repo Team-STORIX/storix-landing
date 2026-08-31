@@ -196,7 +196,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   margin-right: auto;
 }
@@ -257,6 +257,10 @@
   line-height: 140%;
 }
 
+.storyCardFrontMessage span {
+  display: block;
+}
+
 .storyCardFrontInfoRows {
   position: absolute;
   right: 16px;
@@ -279,10 +283,11 @@
 .storyCardFrontInfoChip {
   display: inline-flex;
   width: 86px;
+  height: 24px;
+  box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  min-height: 18px;
-  padding: 1px 10px 2px;
+  padding: 4px 10px;
   border-radius: 44.722px;
   background: var(--Grayscale-black, #000000);
   color: var(--Magenta-300, #ff4093);
@@ -456,9 +461,11 @@
 }
 
 .storyCardShareActionText {
-  color: #131112;
+  color: var(--Grayscale-black, #000);
   text-align: center;
-  font-size: 12px;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-style: normal;
   font-weight: 500;
   line-height: 140%;
   white-space: nowrap;
@@ -629,6 +636,103 @@
   border-radius: 8px;
   background: transparent;
   cursor: pointer;
+}
+
+.storyCardGuideModal-result {
+  width: min(326px, calc(100vw - 32px));
+  aspect-ratio: auto;
+  max-height: calc(100dvh - 40px);
+  padding: 31px 17px 17px;
+  border-radius: 8px;
+  overflow-y: auto;
+  color: #131112;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  text-align: center;
+  -webkit-overflow-scrolling: touch;
+}
+
+.storyCardGuideTitle {
+  margin: 0;
+  color: #131112;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 130%;
+}
+
+.storyCardGuideLead {
+  margin: 18px 0 0;
+  color: #877f83;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 140%;
+}
+
+.storyCardGuideList {
+  display: flex;
+  flex-direction: column;
+  gap: 23px;
+  margin-top: 48px;
+  text-align: left;
+}
+
+.storyCardGuideItem {
+  display: grid;
+  grid-template-columns: 43px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+}
+
+.storyCardGuideItemIcon {
+  display: inline-flex;
+  width: 43px;
+  height: 43px;
+  align-items: flex-start;
+  justify-content: center;
+  color: #ff78ae;
+}
+
+.storyCardGuideItem h3 {
+  margin: 0;
+  color: #131112;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 140%;
+}
+
+.storyCardGuideItem p {
+  margin: 10px 0 0;
+  color: #877f83;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 145%;
+}
+
+.storyCardGuideConfirm {
+  display: flex;
+  width: 100%;
+  height: 58px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 33px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: #131112;
+  color: #ffffff;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 100%;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.storyCardGuideNotice {
+  margin: 17px 0 0;
+  color: #b7afb3;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 140%;
 }
 
 .storyCardSaveModalBackdrop {

@@ -382,6 +382,18 @@ function drawTextLine(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   })
 }
 
+function drawTextLines(ctx, lines, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const visibleLines = lines
+    .map((line) => String(line || '').trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+
+  const startY = y - ((visibleLines.length - 1) * lineHeight) / 2
+  visibleLines.forEach((visibleLine, index) => {
+    drawTextLine(ctx, visibleLine, x, startY + index * lineHeight, maxWidth, lineHeight, 1)
+  })
+}
+
 function drawPillText(ctx, text, x, centerY, options) {
   const {
     font,
@@ -389,9 +401,10 @@ function drawPillText(ctx, text, x, centerY, options) {
     backgroundColor,
     horizontalPadding,
     height,
+    width: fixedWidth,
   } = options
   ctx.font = font
-  const width = Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
+  const width = fixedWidth ?? Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
   drawRoundedRect(ctx, x, centerY - height / 2, width, height, height / 2)
   ctx.fillStyle = backgroundColor
   ctx.fill()
@@ -576,7 +589,10 @@ async function createStoryCardShareImage(card) {
       : card.message
         ? [card.message]
         : []
-  const message = messageLines.join(' ') || '나만의 스토리 카드'
+  const visibleMessageLines = messageLines
+    .map((line) => String(line || '').trim())
+    .filter(Boolean)
+    .slice(0, 2)
 
   // 실제 DOM에서 메시지 스타일 읽기
   const messageElement = cardElement.querySelector('.storyCardFrontMessage')
@@ -593,7 +609,15 @@ async function createStoryCardShareImage(card) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.font = `800 ${messageFontSize}px SUIT, sans-serif`
-  drawTextLine(ctx, message, width / 2, messageY, width - messageHorizontalMargin * 2, messageLineHeight, 2)
+  drawTextLines(
+    ctx,
+    visibleMessageLines.length > 0 ? visibleMessageLines : ['나만의 스토리 카드'],
+    width / 2,
+    messageY,
+    width - messageHorizontalMargin * 2,
+    messageLineHeight,
+    2,
+  )
 
   const rows = [
     ['오늘의 몰입력', card.immersion || '-'],
@@ -606,12 +630,14 @@ async function createStoryCardShareImage(card) {
   const infoRowsStyles = infoRowsElement ? window.getComputedStyle(infoRowsElement) : null
   const firstInfoRow = cardElement.querySelector('.storyCardFrontInfoRow')
   const firstChip = cardElement.querySelector('.storyCardFrontInfoChip')
+  const firstChipStyles = firstChip ? window.getComputedStyle(firstChip) : null
 
   const infoBottom = infoRowsStyles ? parseFloat(infoRowsStyles.bottom || '30') * pixelRatio : 60
   const infoRowGap = infoRowsStyles ? parseFloat(infoRowsStyles.gap || '12') * pixelRatio : 24
-  const infoFontSize = firstChip ? parseFloat(window.getComputedStyle(firstChip).fontSize || '11') * pixelRatio : 22
-  const chipHorizontalPadding = firstChip ? parseFloat(window.getComputedStyle(firstChip).paddingLeft || '10') * pixelRatio : 20
-  const chipHeight = firstChip ? parseFloat(window.getComputedStyle(firstChip).minHeight || '18') * pixelRatio : 36
+  const infoFontSize = firstChipStyles ? parseFloat(firstChipStyles.fontSize || '11') * pixelRatio : 22
+  const chipHorizontalPadding = firstChipStyles ? parseFloat(firstChipStyles.paddingLeft || '10') * pixelRatio : 20
+  const fixedChipWidth = firstChipStyles ? parseFloat(firstChipStyles.width || '86') * pixelRatio : 172
+  const chipHeight = firstChipStyles ? parseFloat(firstChipStyles.height || '24') * pixelRatio : 48
   const chipValueGap = firstInfoRow ? parseFloat(window.getComputedStyle(firstInfoRow).gap || '8') * pixelRatio : 16
 
   // Row 중심점 계산: 각 row의 높이(chipHeight)를 고려해서 간격 계산
@@ -626,15 +652,16 @@ async function createStoryCardShareImage(card) {
 
   rows.forEach(([label, value], index) => {
     const centerY = rowCenters[index]
-    const chipWidth = drawPillText(ctx, label, chipX, centerY, {
+    const renderedChipWidth = drawPillText(ctx, label, chipX, centerY, {
       font: valueFont,
       textColor: '#ff4093',
       backgroundColor: '#000000',
       horizontalPadding: chipHorizontalPadding,
       height: chipHeight,
+      width: fixedChipWidth,
     })
 
-    const valueX = chipX + chipWidth + chipValueGap
+    const valueX = chipX + renderedChipWidth + chipValueGap
     // CSS 고정값: arrow width 16px
     const arrowSize = index === 2 && arrowImage ? 16 * pixelRatio : 0
     const maxValueWidth = width - horizontalPadding - valueX - arrowSize
@@ -710,6 +737,52 @@ function XLogo({ size = 20, color = '#131112' }) {
       <path
         d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"
         fill={color}
+      />
+    </svg>
+  )
+}
+
+function StoryCardGuideIcon({ type }) {
+  if (type === 'sparkle') {
+    return (
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+        <path
+          d="M17 2C19.2 10.2 23.8 14.8 32 17C23.8 19.2 19.2 23.8 17 32C14.8 23.8 10.2 19.2 2 17C10.2 14.8 14.8 10.2 17 2Z"
+          stroke="currentColor"
+          strokeWidth="3.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+    )
+  }
+
+  if (type === 'megaphone') {
+    return (
+      <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+        <path
+          d="M6 14.5H13L27 8V26L13 19.5H6V14.5Z"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+        <path d="M13 19.5V28" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true">
+      <path
+        d="M5 8.5H13.5C15.4 8.5 17 10.1 17 12V28C17 25.8 15.2 24 13 24H5V8.5Z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M29 8.5H20.5C18.6 8.5 17 10.1 17 12V28C17 25.8 18.8 24 21 24H29V8.5Z"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinejoin="round"
       />
     </svg>
   )
@@ -871,7 +944,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }
 
   const handleHelpClick = () => {
-    setGuideMode('help')
+    setGuideMode(showCardFront ? 'resultHelp' : 'help')
     setShowGuide(true)
   }
 
@@ -985,11 +1058,10 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const resultDateLabel = formatStoryCardDate(drawnCard?.drawnOn)
   const resultMessageLines =
     Array.isArray(drawnCard?.messageLines) && drawnCard.messageLines.length > 0
-      ? drawnCard.messageLines
+      ? drawnCard.messageLines.map((line) => String(line || '').trim()).filter(Boolean).slice(0, 2)
       : drawnCard?.message
-        ? [drawnCard.message]
+        ? [String(drawnCard.message).trim()].filter(Boolean)
         : []
-  const resultMessage = resultMessageLines.join(' ')
   const luckyWorkId = getLuckyWorkId(drawnCard?.luckyWork)
   const luckyWorkLabel =
     drawnCard?.luckyWork?.title?.trim() ||
@@ -1150,7 +1222,11 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 />
               ) : null}
               <p className="storyCardFrontMessage">
-                {resultMessage || '나만의 스토리 카드'}
+                {resultMessageLines.length > 0
+                  ? resultMessageLines.map((line, index) => (
+                      <span key={`${line}-${index}`}>{line}</span>
+                    ))
+                  : '나만의 스토리 카드'}
               </p>
               <div className="storyCardFrontInfoRows">
                 <div className="storyCardFrontInfoRow">
@@ -1247,25 +1323,81 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           role="presentation"
           onClick={handleBackdropClick}
         >
-          <section
-            className="storyCardGuideModal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="오늘의 스토리 카드 안내"
-            onClick={(clickEvent) => clickEvent.stopPropagation()}
-          >
-            <img
-              className="storyCardGuideImage"
-              src="/events/story-card/storycard-popup.png?v=20260824"
-              alt="오늘의 스토리 카드 안내"
-            />
-            <button
-              className="storyCardGuideAction"
-              type="button"
-              aria-label="카드 고르러 가기"
-              onClick={handleStartClick}
-            />
-          </section>
+          {guideMode === 'resultHelp' ? (
+            <section
+              className="storyCardGuideModal storyCardGuideModal-result"
+              role="dialog"
+              aria-modal="true"
+              aria-label="오늘의 스토리 카드 안내"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+            >
+              <h2 className="storyCardGuideTitle">오늘의 스토리 카드</h2>
+              <p className="storyCardGuideLead">
+                장르와 한마디, 행운의 작품을
+                <br />
+                카드 한 장에 담았어요.
+              </p>
+
+              <div className="storyCardGuideList">
+                <div className="storyCardGuideItem">
+                  <span className="storyCardGuideItemIcon">
+                    <StoryCardGuideIcon type="sparkle" />
+                  </span>
+                  <div>
+                    <h3>세 장 중 한 장을 골라요</h3>
+                    <p>끌리는 카드를 열면 오늘의 이야기가 펼쳐져요.</p>
+                  </div>
+                </div>
+                <div className="storyCardGuideItem">
+                  <span className="storyCardGuideItemIcon">
+                    <StoryCardGuideIcon type="megaphone" />
+                  </span>
+                  <div>
+                    <h3>매일 아침 새로운 카드가 와요</h3>
+                    <p>
+                      오전 6시에 바뀌어요.
+                      <br />
+                      그전까지 오늘 카드는 언제든 다시 볼 수 있어요.
+                    </p>
+                  </div>
+                </div>
+                <div className="storyCardGuideItem">
+                  <span className="storyCardGuideItemIcon">
+                    <StoryCardGuideIcon type="book" />
+                  </span>
+                  <div>
+                    <h3>행운의 작품도 만나보세요</h3>
+                    <p>작품명을 누르면 작품 정보와 독자 리뷰를 볼 수 있어요.</p>
+                  </div>
+                </div>
+              </div>
+
+              <button className="storyCardGuideConfirm" type="button" onClick={handleStartClick}>
+                확인
+              </button>
+              <p className="storyCardGuideNotice">이미지는 생성형 AI를 활용해 제작되었습니다.</p>
+            </section>
+          ) : (
+            <section
+              className="storyCardGuideModal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="오늘의 스토리 카드 안내"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+            >
+              <img
+                className="storyCardGuideImage"
+                src="/events/story-card/storycard-popup.png?v=20260824"
+                alt="오늘의 스토리 카드 안내"
+              />
+              <button
+                className="storyCardGuideAction"
+                type="button"
+                aria-label="카드 고르러 가기"
+                onClick={handleStartClick}
+              />
+            </section>
+          )}
         </div>
       ) : null}
 
