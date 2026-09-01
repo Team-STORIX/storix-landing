@@ -180,6 +180,20 @@ export async function getAppEventModalRequired(appEventId, { signal } = {}) {
   return parseModalRequired(result)
 }
 
+export async function confirmAppEvent(appEventId, { signal } = {}) {
+  const eventId = Number(appEventId)
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) {
+    throw new ApiError('???대깽??ID媛 ?щ컮瑜댁? ?딆뒿?덈떎.', {
+      code: 'INVALID_APP_EVENT_ID',
+    })
+  }
+
+  await apiRequest(`/api/v1/app-events/${eventId}/confirm`, {
+    method: 'PATCH',
+    signal,
+  })
+}
+
 export async function getStoryCardEventStatus({ signal } = {}) {
   const result = await apiRequest('/api/v1/story-card-event', { signal })
   return parseStoryCardStatus(result)

@@ -8,6 +8,7 @@ import {
   postStorixWebViewMessage,
 } from '../lib/webViewBridge.js'
 import {
+  confirmAppEvent,
   drawStoryCardEvent,
   getAppEventModalRequired,
   getStoryCardEventStatus,
@@ -843,6 +844,19 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       .then(({ modalRequired }) => {
         setShowGuide(modalRequired)
         setEntered(!modalRequired)
+        if (modalRequired) {
+          window.requestAnimationFrame(() => {
+            confirmAppEvent(normalizedAppEventId).catch((error) => {
+              if (import.meta.env.DEV) {
+                console.warn('[story-card] app event confirm failed', {
+                  status: error?.status,
+                  code: error?.code,
+                  message: error instanceof Error ? error.message : undefined,
+                })
+              }
+            })
+          })
+        }
       })
       .catch((error) => {
         if (error?.name === 'AbortError') return
