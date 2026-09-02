@@ -42,6 +42,62 @@ function waitForAnimationFrame() {
   })
 }
 
+function waitForImageReady(image) {
+  if (!image || (image.complete && image.naturalWidth > 0)) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      image.removeEventListener('load', finish)
+      image.removeEventListener('error', finish)
+      resolve()
+    }
+
+    image.addEventListener('load', finish, { once: true })
+    image.addEventListener('error', finish, { once: true })
+    window.setTimeout(finish, 5000)
+  }).then(async () => {
+    if (typeof image.decode === 'function') {
+      try {
+        await image.decode()
+      } catch {
+        // The image may already be usable even when decode rejects.
+      }
+    }
+  })
+}
+
+async function waitForStoryCardReady(cardElement) {
+  await document.fonts?.ready
+  const images = Array.from(cardElement.querySelectorAll('img'))
+  await Promise.all(images.map(waitForImageReady))
+  await waitForAnimationFrame()
+  await waitForAnimationFrame()
+}
+
+async function captureVisibleStoryCardRect() {
+  const cardElement = document.querySelector('.storyCardFront')
+  if (!cardElement) return null
+
+  await waitForStoryCardReady(cardElement)
+
+  const rect = cardElement.getBoundingClientRect()
+  if (rect.width <= 0 || rect.height <= 0) return null
+
+  return {
+    rect: {
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+    },
+  }
+}
+
 function closeEventPage() {
   if (isStorixWebView()) {
     postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
@@ -1014,6 +1070,14 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }
 
   const captureCard = async () => {
+    if (isStorixWebView()) {
+      const visibleCard = await captureVisibleStoryCardRect()
+      if (visibleCard) {
+        console.log('[story-card] ✅ Native visible card capture ready', visibleCard.rect)
+        return visibleCard
+      }
+    }
+
     // ✅ Canvas 렌더링 방식만 사용 (DOM 변경 없음)
     try {
       const imageUrl = await createStoryCardShareImage(drawnCard)
