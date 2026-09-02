@@ -313,6 +313,8 @@ async function resolveCanvasImageSources(card) {
 }
 
 function drawRoundedRect(ctx, x, y, width, height, radii) {
+  const maxRadius = Math.max(0, Math.min(width, height) / 2)
+  const clampRadius = (value) => Math.min(Math.max(Number(value) || 0, 0), maxRadius)
   const radius = {
     topLeft: 0,
     topRight: 0,
@@ -327,6 +329,10 @@ function drawRoundedRect(ctx, x, y, width, height, radii) {
         }
       : radii),
   }
+  radius.topLeft = clampRadius(radius.topLeft)
+  radius.topRight = clampRadius(radius.topRight)
+  radius.bottomRight = clampRadius(radius.bottomRight)
+  radius.bottomLeft = clampRadius(radius.bottomLeft)
 
   ctx.beginPath()
   ctx.moveTo(x + radius.topLeft, y)
