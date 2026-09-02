@@ -422,10 +422,11 @@ function drawPillText(ctx, text, x, centerY, options) {
     horizontalPadding,
     height,
     width: fixedWidth,
+    radius,
   } = options
   ctx.font = font
   const width = fixedWidth ?? Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
-  drawRoundedRect(ctx, x, centerY - height / 2, width, height, height / 2)
+  drawRoundedRect(ctx, x, centerY - height / 2, width, height, radius ?? height / 2)
   ctx.fillStyle = backgroundColor
   ctx.fill()
   ctx.fillStyle = textColor
@@ -658,6 +659,7 @@ async function createStoryCardShareImage(card) {
   const chipHorizontalPadding = firstChipStyles ? parseFloat(firstChipStyles.paddingLeft || '10') * pixelRatio : 20
   const fixedChipWidth = firstChipStyles ? parseFloat(firstChipStyles.width || '86') * pixelRatio : 172
   const chipHeight = firstChipStyles ? parseFloat(firstChipStyles.height || '24') * pixelRatio : 48
+  const chipRadius = firstChipStyles ? parseFloat(firstChipStyles.borderRadius || '999') * pixelRatio : chipHeight / 2
   const chipValueGap = firstInfoRow ? parseFloat(window.getComputedStyle(firstInfoRow).gap || '8') * pixelRatio : 16
 
   // Row 중심점 계산: 각 row의 높이(chipHeight)를 고려해서 간격 계산
@@ -679,6 +681,7 @@ async function createStoryCardShareImage(card) {
       horizontalPadding: chipHorizontalPadding,
       height: chipHeight,
       width: fixedChipWidth,
+      radius: chipRadius,
     })
 
     const valueX = chipX + renderedChipWidth + chipValueGap
