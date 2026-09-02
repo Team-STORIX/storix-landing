@@ -595,20 +595,25 @@
 
 .storyCardAnimationOverlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   z-index: 12;
   display: flex;
+  width: min(100vw, 480px);
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   background: #000000;
   pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .storyCardAnimationVideo {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .storyCardGuideBackdrop {
