@@ -202,9 +202,7 @@ async function waitForStoryCardReady() {
   const cardElement = document.querySelector('.storyCardFront')
   if (!cardElement) throw new Error('Story card element is unavailable')
 
-  const displayedImages = Array.from(
-    cardElement.querySelectorAll('img:not(.storyCardFrontFinalImage)'),
-  )
+  const displayedImages = Array.from(cardElement.querySelectorAll('img'))
   await Promise.all(displayedImages.map(waitForImageElement))
   await waitForAnimationFrame()
   await waitForAnimationFrame()
@@ -856,17 +854,14 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const [selectedChoice, setSelectedChoice] = useState(null)
   const [drawStatus, setDrawStatus] = useState('idle')
   const [drawnCard, setDrawnCard] = useState(null)
-  const [finalCardPreview, setFinalCardPreview] = useState({ card: null, url: '' })
   const [saveModalVisible, setSaveModalVisible] = useState(false)
   const drawControllerRef = useRef(null)
   const statusControllerRef = useRef(null)
   const modalRequiredControllerRef = useRef(null)
   const animationEndedRef = useRef(false)
   const drawFailedRef = useRef(false)
-  const drawnCardRef = useRef(null)
   const finalCardImageRef = useRef({ card: null, url: '' })
   const finalCardImagePromiseRef = useRef({ card: null, promise: null })
-  drawnCardRef.current = drawnCard
   const isIOS = isIOSDevice()
   const { saveToGallery, shareImage, shareToTwitter, isMediaBusy } =
     useCardShare()
@@ -1160,7 +1155,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     try {
       const url = await promise
       finalCardImageRef.current = { card, url }
-      if (drawnCardRef.current === card) setFinalCardPreview({ card, url })
       return url
     } finally {
       if (finalCardImagePromiseRef.current.promise === promise) {
@@ -1172,7 +1166,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   useEffect(() => {
     finalCardImageRef.current = { card: null, url: '' }
     finalCardImagePromiseRef.current = { card: null, promise: null }
-    setFinalCardPreview({ card: null, url: '' })
     if (!showCardFront || !drawnCard) return undefined
 
     let cancelled = false
@@ -1184,7 +1177,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       .then((url) => {
         if (cancelled) return
         finalCardImageRef.current = { card, url }
-        setFinalCardPreview({ card, url })
       })
       .catch((error) => {
         if (cancelled) return
@@ -1202,10 +1194,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       cancelled = true
     }
   }, [showCardFront, drawnCard])
-
-  const finalCardImage = finalCardPreview.card === drawnCard
-    ? finalCardPreview.url
-    : ''
 
   // 디버깅 로그
   useEffect(() => {
@@ -1409,14 +1397,6 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 </div>
               </div>
             </div>
-            {finalCardImage ? (
-              <img
-                className="storyCardFrontFinalImage"
-                src={finalCardImage}
-                alt=""
-                aria-hidden="true"
-              />
-            ) : null}
           </article>
 
           <div className={`storyCardShareActions${isIOS ? ' storyCardShareActions-ios' : ''}`}>
