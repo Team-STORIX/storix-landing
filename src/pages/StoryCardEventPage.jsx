@@ -345,11 +345,8 @@ async function resolveCanvasImageSources(card) {
     .map(([key, url]) => ({ key, url }))
 
   const nativeResult = await convertImagesWithNativeBridge(remoteEntries)
-  if (!nativeResult.success) {
-    const failedKeys = nativeResult.errors.map(({ key }) => key).filter(Boolean)
-    throw new Error(`Native image conversion failed: ${failedKeys.join(', ') || 'unknown'}`)
-  }
 
+  // 부분 성공 허용: 성공한 이미지는 사용하고, 실패한 것만 fetch로 재시도
   const resolvedEntries = await Promise.all(
     Object.entries(sources).map(async ([key, url]) => {
       if (!url) return [key, '']
