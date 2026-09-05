@@ -154,28 +154,60 @@ function getLuckyWorkId(luckyWork) {
   }
 }
 
-function escapeXml(value) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+function waitForDelay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
-function createFallbackCardDataUrl(card) {
-  const title = escapeXml(card?.genre?.trim() || '오늘의 카드')
-  const message = escapeXml(card?.message?.trim() || '나만의 스토리 카드')
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1080" viewBox="0 0 720 1080">
-      <rect width="720" height="1080" rx="40" fill="#ffffff"/>
-      <rect x="40" y="40" width="640" height="1000" rx="32" fill="#131112"/>
-      <text x="360" y="450" text-anchor="middle" fill="#ffffff" font-size="44" font-family="sans-serif" font-weight="700">${title}</text>
-      <text x="360" y="532" text-anchor="middle" fill="#cdc4c8" font-size="28" font-family="sans-serif">${message}</text>
-    </svg>
-  `
+function waitForImageElement(image) {
+  if (image.complete) {
+    if (image.naturalWidth <= 0) {
+      return Promise.reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
+    }
+    return image.decode?.().catch(() => undefined) ?? Promise.resolve()
+  }
 
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error(`Displayed image timed out: ${image.currentSrc || image.src}`))
+    }, 10000)
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId)
+      image.removeEventListener('load', handleLoad)
+      image.removeEventListener('error', handleError)
+    }
+    const handleLoad = async () => {
+      cleanup()
+      try {
+        await image.decode?.()
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    }
+    const handleError = () => {
+      cleanup()
+      reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
+    }
+
+    image.addEventListener('load', handleLoad, { once: true })
+    image.addEventListener('error', handleError, { once: true })
+  })
+}
+
+async function waitForStoryCardReady() {
+  await document.fonts?.ready
+
+  const cardElement = document.querySelector('.storyCardFront')
+  if (!cardElement) throw new Error('Story card element is unavailable')
+
+  const displayedImages = Array.from(
+    cardElement.querySelectorAll('img:not(.storyCardFrontFinalImage)'),
+  )
+  await Promise.all(displayedImages.map(waitForImageElement))
+  await waitForAnimationFrame()
+  await waitForAnimationFrame()
 }
 
 function loadCanvasImage(src) {
@@ -184,7 +216,14 @@ function loadCanvasImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.crossOrigin = 'anonymous'
-    image.onload = () => resolve(image)
+    image.onload = async () => {
+      try {
+        await image.decode?.()
+        resolve(image)
+      } catch (error) {
+        reject(error)
+      }
+    }
     image.onerror = reject
     image.src = src
   })
@@ -192,10 +231,10 @@ function loadCanvasImage(src) {
 
 function convertImagesWithNativeBridge(entries) {
   if (!isStorixWebView() || entries.length === 0) {
-    return Promise.resolve({})
+    return Promise.resolve({ success: true, images: {}, errors: [] })
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const requestId = `story-card-images-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`
@@ -217,10 +256,23 @@ function convertImagesWithNativeBridge(entries) {
           return
         }
 
-        cleanup()
-        resolve(message.payload.images && typeof message.payload.images === 'object'
+        const images = message.payload.images && typeof message.payload.images === 'object'
           ? message.payload.images
-          : {})
+          : {}
+        const errors = Array.isArray(message.payload.errors) ? message.payload.errors : []
+        const missingKeys = entries
+          .map(({ key }) => key)
+          .filter((key) => typeof images[key] !== 'string' || !images[key])
+
+        cleanup()
+        resolve({
+          success: message.payload.success !== false && errors.length === 0 && missingKeys.length === 0,
+          images,
+          errors: [
+            ...errors,
+            ...missingKeys.map((key) => ({ key, code: 'IMAGE_RESULT_MISSING' })),
+          ],
+        })
       } catch {
         // Ignore unrelated bridge messages.
       }
@@ -236,8 +288,8 @@ function convertImagesWithNativeBridge(entries) {
 
     const timeoutId = window.setTimeout(() => {
       cleanup()
-      resolve({})
-    }, 15000)
+      reject(new Error('Native image conversion timed out'))
+    }, 30000)
 
     window.addEventListener('message', handleMessage)
     window.addEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
@@ -249,7 +301,7 @@ function convertImagesWithNativeBridge(entries) {
 
     if (!sent) {
       cleanup()
-      resolve({})
+      reject(new Error('Native image conversion bridge unavailable'))
     }
   })
 }
@@ -294,18 +346,17 @@ async function resolveCanvasImageSources(card) {
     .filter(([, url]) => /^https?:\/\//i.test(url))
     .map(([key, url]) => ({ key, url }))
 
-  const nativeImages = await convertImagesWithNativeBridge(remoteEntries)
+  const nativeResult = await convertImagesWithNativeBridge(remoteEntries)
+  if (!nativeResult.success) {
+    const failedKeys = nativeResult.errors.map(({ key }) => key).filter(Boolean)
+    throw new Error(`Native image conversion failed: ${failedKeys.join(', ') || 'unknown'}`)
+  }
 
   const resolvedEntries = await Promise.all(
     Object.entries(sources).map(async ([key, url]) => {
       if (!url) return [key, '']
-      if (nativeImages[key]) return [key, nativeImages[key]]
-
-      try {
-        return [key, await fetchImageAsDataUrl(url)]
-      } catch {
-        return [key, url]
-      }
+      if (nativeResult.images[key]) return [key, nativeResult.images[key]]
+      return [key, await fetchImageAsDataUrl(url)]
     }),
   )
 
@@ -503,11 +554,11 @@ async function createStoryCardShareImage(card) {
     iconImage,
     arrowImage,
   ] = await Promise.all([
-    loadCanvasImage(imageSources.topBackground).catch(() => null),
-    loadCanvasImage(imageSources.aiImage).catch(() => null),
-    loadCanvasImage(imageSources.bodyBackground).catch(() => null),
-    loadCanvasImage(imageSources.iconImage).catch(() => null),
-    loadCanvasImage(imageSources.arrowImage).catch(() => null),
+    loadCanvasImage(imageSources.topBackground),
+    loadCanvasImage(imageSources.aiImage),
+    loadCanvasImage(imageSources.bodyBackground),
+    loadCanvasImage(imageSources.iconImage),
+    loadCanvasImage(imageSources.arrowImage),
   ])
 
   ctx.save()
@@ -754,6 +805,35 @@ async function createStoryCardShareImage(card) {
   return canvas.toDataURL('image/png')
 }
 
+async function createStoryCardFinalImage(card) {
+  let lastError = null
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await waitForStoryCardReady()
+      const imageUrl = await createStoryCardShareImage(card)
+      if (!imageUrl?.startsWith('data:image/png')) {
+        throw new Error('Story card renderer did not return a PNG')
+      }
+
+      console.log('[story-card] Final PNG ready', {
+        attempt,
+        byteLength: imageUrl.length,
+      })
+      return imageUrl
+    } catch (error) {
+      lastError = error
+      console.warn('[story-card] Final PNG attempt failed', {
+        attempt,
+        message: error instanceof Error ? error.message : undefined,
+      })
+      if (attempt < 3) await waitForDelay(attempt * 400)
+    }
+  }
+
+  throw lastError ?? new Error('Story card PNG generation failed')
+}
+
 function XLogo({ size = 20, color = '#131112' }) {
   return (
     <svg
@@ -776,14 +856,19 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const [selectedChoice, setSelectedChoice] = useState(null)
   const [drawStatus, setDrawStatus] = useState('idle')
   const [drawnCard, setDrawnCard] = useState(null)
+  const [finalCardPreview, setFinalCardPreview] = useState({ card: null, url: '' })
   const [saveModalVisible, setSaveModalVisible] = useState(false)
   const drawControllerRef = useRef(null)
   const statusControllerRef = useRef(null)
   const modalRequiredControllerRef = useRef(null)
   const animationEndedRef = useRef(false)
   const drawFailedRef = useRef(false)
+  const drawnCardRef = useRef(null)
+  const finalCardImageRef = useRef({ card: null, url: '' })
+  const finalCardImagePromiseRef = useRef({ card: null, promise: null })
+  drawnCardRef.current = drawnCard
   const isIOS = isIOSDevice()
-  const { saveToGallery, shareImage, shareToTwitter, isSaving, isSharing } =
+  const { saveToGallery, shareImage, shareToTwitter, isMediaBusy } =
     useCardShare()
 
   useEffect(() => subscribeToWebViewAuth(setAuthSnapshot), [])
@@ -1014,28 +1099,15 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }
 
   const captureCard = async () => {
-    // ✅ Canvas 렌더링 방식만 사용 (DOM 변경 없음)
     try {
-      const imageUrl = await createStoryCardShareImage(drawnCard)
-      if (imageUrl) {
-        console.log('[story-card] ✅ Canvas capture success', {
-          urlLength: imageUrl.length,
-          urlPrefix: imageUrl.substring(0, 50)
-        })
-        return imageUrl
-      }
+      return await getFinalCardImage(drawnCard)
     } catch (error) {
-      console.error('[story-card] ❌ Canvas capture failed', {
+      console.error('[story-card] Final PNG unavailable', {
         message: error instanceof Error ? error.message : undefined,
         stack: error instanceof Error ? error.stack : undefined,
       })
-      // Fallback to SVG (rect 방식 제거 - DOM 변경 방지)
-      return createFallbackCardDataUrl(drawnCard)
+      return null
     }
-
-    // 최종 fallback: SVG
-    console.warn('[story-card] ❌ Using fallback SVG')
-    return createFallbackCardDataUrl(drawnCard)
   }
 
   const handleSave = () => {
@@ -1069,6 +1141,71 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     drawnCard?.luckyWork?.title?.trim() ||
     drawnCard?.luckyWork?.displayLabel?.trim() ||
     ''
+
+  const getFinalCardImage = async (card) => {
+    if (!card) throw new Error('Story card data is unavailable')
+    if (finalCardImageRef.current.card === card && finalCardImageRef.current.url) {
+      return finalCardImageRef.current.url
+    }
+    if (
+      finalCardImagePromiseRef.current.card === card &&
+      finalCardImagePromiseRef.current.promise
+    ) {
+      return finalCardImagePromiseRef.current.promise
+    }
+
+    const promise = createStoryCardFinalImage(card)
+    finalCardImagePromiseRef.current = { card, promise }
+
+    try {
+      const url = await promise
+      finalCardImageRef.current = { card, url }
+      if (drawnCardRef.current === card) setFinalCardPreview({ card, url })
+      return url
+    } finally {
+      if (finalCardImagePromiseRef.current.promise === promise) {
+        finalCardImagePromiseRef.current = { card: null, promise: null }
+      }
+    }
+  }
+
+  useEffect(() => {
+    finalCardImageRef.current = { card: null, url: '' }
+    finalCardImagePromiseRef.current = { card: null, promise: null }
+    setFinalCardPreview({ card: null, url: '' })
+    if (!showCardFront || !drawnCard) return undefined
+
+    let cancelled = false
+    const card = drawnCard
+    const promise = createStoryCardFinalImage(card)
+    finalCardImagePromiseRef.current = { card, promise }
+
+    promise
+      .then((url) => {
+        if (cancelled) return
+        finalCardImageRef.current = { card, url }
+        setFinalCardPreview({ card, url })
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('[story-card] Initial final PNG generation failed', {
+          message: error instanceof Error ? error.message : undefined,
+        })
+      })
+      .finally(() => {
+        if (finalCardImagePromiseRef.current.promise === promise) {
+          finalCardImagePromiseRef.current = { card: null, promise: null }
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [showCardFront, drawnCard])
+
+  const finalCardImage = finalCardPreview.card === drawnCard
+    ? finalCardPreview.url
+    : ''
 
   // 디버깅 로그
   useEffect(() => {
@@ -1272,6 +1409,14 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 </div>
               </div>
             </div>
+            {finalCardImage ? (
+              <img
+                className="storyCardFrontFinalImage"
+                src={finalCardImage}
+                alt=""
+                aria-hidden="true"
+              />
+            ) : null}
           </article>
 
           <div className={`storyCardShareActions${isIOS ? ' storyCardShareActions-ios' : ''}`}>
@@ -1279,7 +1424,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
               className="storyCardShareAction"
               type="button"
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isMediaBusy}
             >
               <span className="storyCardShareActionCircle">
                 <img src="/events/story-card/icon-download.svg" alt="" aria-hidden="true" />
@@ -1290,7 +1435,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
               className="storyCardShareAction"
               type="button"
               onClick={handleShare}
-              disabled={isSharing}
+              disabled={isMediaBusy}
             >
               <span className="storyCardShareActionCircle">
                 <img src="/events/story-card/icon-share.svg" alt="" aria-hidden="true" />
@@ -1302,7 +1447,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 className="storyCardShareAction"
                 type="button"
                 onClick={handleTwitterShare}
-                disabled={isSharing}
+                disabled={isMediaBusy}
               >
                 <span className="storyCardShareActionCircle">
                   <XLogo size={20} color="#ffffff" />

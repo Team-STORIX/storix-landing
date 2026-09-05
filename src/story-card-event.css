@@ -124,6 +124,7 @@
 }
 
 .storyCardFront {
+  position: relative;
   justify-self: center;
   align-self: start;
   display: grid;
@@ -135,6 +136,18 @@
   overflow: hidden;
   border-radius: 20px;
   background: transparent;
+}
+
+.storyCardFrontFinalImage {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  user-select: none;
+  pointer-events: none;
 }
 
 .storyCardFrontHero {
