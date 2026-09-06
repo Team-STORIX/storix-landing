@@ -46,8 +46,8 @@
   display: grid;
   grid-template-columns: 24px 1fr 24px;
   align-items: center;
-  min-height: calc(56px + env(safe-area-inset-top));
-  padding: env(safe-area-inset-top) 16px 0;
+  height: 56px;
+  padding: 8px 16px;
   background: #ffffff;
 }
 

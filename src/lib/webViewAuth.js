@@ -12,6 +12,16 @@ let accessToken = normalizeAccessToken(injectedAuth?.accessToken)
 let version = 0
 const subscribers = new Set()
 
+function createAbortError() {
+  if (typeof DOMException === 'function') {
+    return new DOMException('The operation was aborted.', 'AbortError')
+  }
+
+  const error = new Error('The operation was aborted.')
+  error.name = 'AbortError'
+  return error
+}
+
 function getSnapshot() {
   return {
     authenticated: Boolean(accessToken),
@@ -49,6 +59,54 @@ export function getWebViewAuthSnapshot() {
 export function subscribeToWebViewAuth(subscriber) {
   subscribers.add(subscriber)
   return () => subscribers.delete(subscriber)
+}
+
+export function waitForWebViewAccessToken({
+  previousToken = null,
+  signal,
+  timeoutMs = 10000,
+} = {}) {
+  const currentToken = getWebViewAccessToken()
+
+  if (currentToken && currentToken !== previousToken) {
+    return Promise.resolve(currentToken)
+  }
+
+  if (signal?.aborted) {
+    return Promise.reject(createAbortError())
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId = null
+
+    const cleanup = () => {
+      unsubscribe()
+      signal?.removeEventListener('abort', handleAbort)
+      if (timeoutId != null) window.clearTimeout(timeoutId)
+    }
+
+    const handleAbort = () => {
+      cleanup()
+      reject(createAbortError())
+    }
+
+    const unsubscribe = subscribeToWebViewAuth(() => {
+      const nextToken = getWebViewAccessToken()
+      if (!nextToken || nextToken === previousToken) return
+
+      cleanup()
+      resolve(nextToken)
+    })
+
+    if (signal) {
+      signal.addEventListener('abort', handleAbort, { once: true })
+    }
+
+    timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('Timed out waiting for refreshed accessToken.'))
+    }, timeoutMs)
+  })
 }
 
 function handleAuthEvent(event) {

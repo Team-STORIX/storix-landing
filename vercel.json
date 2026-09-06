@@ -4,6 +4,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/dev/api/v1/(.*)",
+      "destination": "https://dev.storix.kr/api/v1/$1"
+    },
+    {
+      "source": "/api/prod/api/v1/(.*)",
+      "destination": "https://api.storix.kr/api/v1/$1"
+    },
+    {
       "source": "/event/(.*)",
       "destination": "/index.html"
     },

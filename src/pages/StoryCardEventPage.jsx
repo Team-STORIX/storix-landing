@@ -8,6 +8,7 @@ import {
   postStorixWebViewMessage,
 } from '../lib/webViewBridge.js'
 import {
+  confirmAppEvent,
   drawStoryCardEvent,
   getAppEventModalRequired,
   getStoryCardEventStatus,
@@ -17,10 +18,29 @@ import { useCardShare } from '../features/story-card-event/useCardShare.js'
 import '../story-card-event.css'
 
 const STORY_CARD_CHOICES = [
-  { key: 'left', label: '왼쪽 카드', videoSrc: '/events/story-card/left.mp4' },
-  { key: 'center', label: '가운데 카드', videoSrc: '/events/story-card/centre.mp4' },
-  { key: 'right', label: '오른쪽 카드', videoSrc: '/events/story-card/right.mp4' },
+  { key: 'left', label: '왼쪽 카드', videoSrc: '/events/story-card/left.mp4?v=20260902' },
+  { key: 'center', label: '가운데 카드', videoSrc: '/events/story-card/centre.mp4?v=20260902' },
+  { key: 'right', label: '오른쪽 카드', videoSrc: '/events/story-card/right.mp4?v=20260902' },
 ]
+
+const preloadedVideoSources = new Set()
+
+function preloadStoryCardVideo(src) {
+  if (typeof document === 'undefined' || preloadedVideoSources.has(src)) return
+
+  preloadedVideoSources.add(src)
+  const link = document.createElement('link')
+  link.rel = 'preload'
+  link.as = 'video'
+  link.href = src
+  document.head.appendChild(link)
+}
+
+function waitForAnimationFrame() {
+  return new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve())
+  })
+}
 
 function closeEventPage() {
   if (isStorixWebView()) {
@@ -94,7 +114,7 @@ function createFallbackStoryCard() {
 function formatStoryCardDate(value) {
   if (typeof value !== 'string' || !value.trim()) return ''
 
-  const [year, month, day] = value.trim().split('-').map(Number)
+  const [year, month, day] = value.trim().slice(0, 10).split('-').map(Number)
   if (!year || !month || !day) return ''
 
   const date = new Date(year, month - 1, day)
@@ -134,28 +154,58 @@ function getLuckyWorkId(luckyWork) {
   }
 }
 
-function escapeXml(value) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;')
+function waitForDelay(milliseconds) {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
 }
 
-function createFallbackCardDataUrl(card) {
-  const title = escapeXml(card?.genre?.trim() || '오늘의 카드')
-  const message = escapeXml(card?.message?.trim() || '나만의 스토리 카드')
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="720" height="1080" viewBox="0 0 720 1080">
-      <rect width="720" height="1080" rx="40" fill="#ffffff"/>
-      <rect x="40" y="40" width="640" height="1000" rx="32" fill="#131112"/>
-      <text x="360" y="450" text-anchor="middle" fill="#ffffff" font-size="44" font-family="sans-serif" font-weight="700">${title}</text>
-      <text x="360" y="532" text-anchor="middle" fill="#cdc4c8" font-size="28" font-family="sans-serif">${message}</text>
-    </svg>
-  `
+function waitForImageElement(image) {
+  if (image.complete) {
+    if (image.naturalWidth <= 0) {
+      return Promise.reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
+    }
+    return image.decode?.().catch(() => undefined) ?? Promise.resolve()
+  }
 
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error(`Displayed image timed out: ${image.currentSrc || image.src}`))
+    }, 10000)
+
+    const cleanup = () => {
+      window.clearTimeout(timeoutId)
+      image.removeEventListener('load', handleLoad)
+      image.removeEventListener('error', handleError)
+    }
+    const handleLoad = async () => {
+      cleanup()
+      try {
+        await image.decode?.()
+        resolve()
+      } catch (error) {
+        reject(error)
+      }
+    }
+    const handleError = () => {
+      cleanup()
+      reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
+    }
+
+    image.addEventListener('load', handleLoad, { once: true })
+    image.addEventListener('error', handleError, { once: true })
+  })
+}
+
+async function waitForStoryCardReady() {
+  await document.fonts?.ready
+
+  const cardElement = document.querySelector('.storyCardFront')
+  if (!cardElement) throw new Error('Story card element is unavailable')
+
+  const displayedImages = Array.from(cardElement.querySelectorAll('img'))
+  await Promise.all(displayedImages.map(waitForImageElement))
+  await waitForAnimationFrame()
+  await waitForAnimationFrame()
 }
 
 function loadCanvasImage(src) {
@@ -164,7 +214,14 @@ function loadCanvasImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image()
     image.crossOrigin = 'anonymous'
-    image.onload = () => resolve(image)
+    image.onload = async () => {
+      try {
+        await image.decode?.()
+        resolve(image)
+      } catch (error) {
+        reject(error)
+      }
+    }
     image.onerror = reject
     image.src = src
   })
@@ -172,10 +229,10 @@ function loadCanvasImage(src) {
 
 function convertImagesWithNativeBridge(entries) {
   if (!isStorixWebView() || entries.length === 0) {
-    return Promise.resolve({})
+    return Promise.resolve({ success: true, images: {}, errors: [] })
   }
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const requestId = `story-card-images-${Date.now()}-${Math.random()
       .toString(36)
       .slice(2)}`
@@ -197,10 +254,23 @@ function convertImagesWithNativeBridge(entries) {
           return
         }
 
-        cleanup()
-        resolve(message.payload.images && typeof message.payload.images === 'object'
+        const images = message.payload.images && typeof message.payload.images === 'object'
           ? message.payload.images
-          : {})
+          : {}
+        const errors = Array.isArray(message.payload.errors) ? message.payload.errors : []
+        const missingKeys = entries
+          .map(({ key }) => key)
+          .filter((key) => typeof images[key] !== 'string' || !images[key])
+
+        cleanup()
+        resolve({
+          success: message.payload.success !== false && errors.length === 0 && missingKeys.length === 0,
+          images,
+          errors: [
+            ...errors,
+            ...missingKeys.map((key) => ({ key, code: 'IMAGE_RESULT_MISSING' })),
+          ],
+        })
       } catch {
         // Ignore unrelated bridge messages.
       }
@@ -216,8 +286,8 @@ function convertImagesWithNativeBridge(entries) {
 
     const timeoutId = window.setTimeout(() => {
       cleanup()
-      resolve({})
-    }, 15000)
+      reject(new Error('Native image conversion timed out'))
+    }, 30000)
 
     window.addEventListener('message', handleMessage)
     window.addEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
@@ -229,7 +299,7 @@ function convertImagesWithNativeBridge(entries) {
 
     if (!sent) {
       cleanup()
-      resolve({})
+      reject(new Error('Native image conversion bridge unavailable'))
     }
   })
 }
@@ -255,7 +325,7 @@ async function resolveCanvasImageSources(card) {
     aiImage: card.aiImageUrl?.trim() || card.imageUrl?.trim() || '',
     bodyBackground: card.backgroundImageUrl?.trim() || '',
     iconImage: card.iconImageUrl?.trim() || '',
-    arrowImage: '/events/story-card/icon-arrow-forward-xsmall.png',
+    arrowImage: '/events/story-card/icon-arrow-forward-xsmall.svg',
   }
 
   console.log('[story-card] Image sources', {
@@ -274,18 +344,14 @@ async function resolveCanvasImageSources(card) {
     .filter(([, url]) => /^https?:\/\//i.test(url))
     .map(([key, url]) => ({ key, url }))
 
-  const nativeImages = await convertImagesWithNativeBridge(remoteEntries)
+  const nativeResult = await convertImagesWithNativeBridge(remoteEntries)
 
+  // 부분 성공 허용: 성공한 이미지는 사용하고, 실패한 것만 fetch로 재시도
   const resolvedEntries = await Promise.all(
     Object.entries(sources).map(async ([key, url]) => {
       if (!url) return [key, '']
-      if (nativeImages[key]) return [key, nativeImages[key]]
-
-      try {
-        return [key, await fetchImageAsDataUrl(url)]
-      } catch {
-        return [key, url]
-      }
+      if (nativeResult.images[key]) return [key, nativeResult.images[key]]
+      return [key, await fetchImageAsDataUrl(url)]
     }),
   )
 
@@ -293,6 +359,8 @@ async function resolveCanvasImageSources(card) {
 }
 
 function drawRoundedRect(ctx, x, y, width, height, radii) {
+  const maxRadius = Math.max(0, Math.min(width, height) / 2)
+  const clampRadius = (value) => Math.min(Math.max(Number(value) || 0, 0), maxRadius)
   const radius = {
     topLeft: 0,
     topRight: 0,
@@ -307,6 +375,10 @@ function drawRoundedRect(ctx, x, y, width, height, radii) {
         }
       : radii),
   }
+  radius.topLeft = clampRadius(radius.topLeft)
+  radius.topRight = clampRadius(radius.topRight)
+  radius.bottomRight = clampRadius(radius.bottomRight)
+  radius.bottomLeft = clampRadius(radius.bottomLeft)
 
   ctx.beginPath()
   ctx.moveTo(x + radius.topLeft, y)
@@ -382,6 +454,18 @@ function drawTextLine(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
   })
 }
 
+function drawTextLines(ctx, lines, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const visibleLines = lines
+    .map((line) => String(line || '').trim())
+    .filter(Boolean)
+    .slice(0, maxLines)
+
+  const startY = y - ((visibleLines.length - 1) * lineHeight) / 2
+  visibleLines.forEach((visibleLine, index) => {
+    drawTextLine(ctx, visibleLine, x, startY + index * lineHeight, maxWidth, lineHeight, 1)
+  })
+}
+
 function drawPillText(ctx, text, x, centerY, options) {
   const {
     font,
@@ -389,10 +473,12 @@ function drawPillText(ctx, text, x, centerY, options) {
     backgroundColor,
     horizontalPadding,
     height,
+    width: fixedWidth,
+    radius,
   } = options
   ctx.font = font
-  const width = Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
-  drawRoundedRect(ctx, x, centerY - height / 2, width, height, height / 2)
+  const width = fixedWidth ?? Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
+  drawRoundedRect(ctx, x, centerY - height / 2, width, height, radius ?? height / 2)
   ctx.fillStyle = backgroundColor
   ctx.fill()
   ctx.fillStyle = textColor
@@ -463,11 +549,11 @@ async function createStoryCardShareImage(card) {
     iconImage,
     arrowImage,
   ] = await Promise.all([
-    loadCanvasImage(imageSources.topBackground).catch(() => null),
-    loadCanvasImage(imageSources.aiImage).catch(() => null),
-    loadCanvasImage(imageSources.bodyBackground).catch(() => null),
-    loadCanvasImage(imageSources.iconImage).catch(() => null),
-    loadCanvasImage(imageSources.arrowImage).catch(() => null),
+    loadCanvasImage(imageSources.topBackground),
+    loadCanvasImage(imageSources.aiImage),
+    loadCanvasImage(imageSources.bodyBackground),
+    loadCanvasImage(imageSources.iconImage),
+    loadCanvasImage(imageSources.arrowImage),
   ])
 
   ctx.save()
@@ -576,7 +662,10 @@ async function createStoryCardShareImage(card) {
       : card.message
         ? [card.message]
         : []
-  const message = messageLines.join(' ') || '나만의 스토리 카드'
+  const visibleMessageLines = messageLines
+    .map((line) => String(line || '').trim())
+    .filter(Boolean)
+    .slice(0, 2)
 
   // 실제 DOM에서 메시지 스타일 읽기
   const messageElement = cardElement.querySelector('.storyCardFrontMessage')
@@ -593,7 +682,15 @@ async function createStoryCardShareImage(card) {
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
   ctx.font = `800 ${messageFontSize}px SUIT, sans-serif`
-  drawTextLine(ctx, message, width / 2, messageY, width - messageHorizontalMargin * 2, messageLineHeight, 2)
+  drawTextLines(
+    ctx,
+    visibleMessageLines.length > 0 ? visibleMessageLines : ['나만의 스토리 카드'],
+    width / 2,
+    messageY,
+    width - messageHorizontalMargin * 2,
+    messageLineHeight,
+    2,
+  )
 
   const rows = [
     ['오늘의 몰입력', card.immersion || '-'],
@@ -606,12 +703,15 @@ async function createStoryCardShareImage(card) {
   const infoRowsStyles = infoRowsElement ? window.getComputedStyle(infoRowsElement) : null
   const firstInfoRow = cardElement.querySelector('.storyCardFrontInfoRow')
   const firstChip = cardElement.querySelector('.storyCardFrontInfoChip')
+  const firstChipStyles = firstChip ? window.getComputedStyle(firstChip) : null
 
   const infoBottom = infoRowsStyles ? parseFloat(infoRowsStyles.bottom || '30') * pixelRatio : 60
   const infoRowGap = infoRowsStyles ? parseFloat(infoRowsStyles.gap || '12') * pixelRatio : 24
-  const infoFontSize = firstChip ? parseFloat(window.getComputedStyle(firstChip).fontSize || '11') * pixelRatio : 22
-  const chipHorizontalPadding = firstChip ? parseFloat(window.getComputedStyle(firstChip).paddingLeft || '10') * pixelRatio : 20
-  const chipHeight = firstChip ? parseFloat(window.getComputedStyle(firstChip).minHeight || '18') * pixelRatio : 36
+  const infoFontSize = firstChipStyles ? parseFloat(firstChipStyles.fontSize || '11') * pixelRatio : 22
+  const chipHorizontalPadding = firstChipStyles ? parseFloat(firstChipStyles.paddingLeft || '10') * pixelRatio : 20
+  const fixedChipWidth = firstChipStyles ? parseFloat(firstChipStyles.width || '86') * pixelRatio : 172
+  const chipHeight = firstChipStyles ? parseFloat(firstChipStyles.height || '24') * pixelRatio : 48
+  const chipRadius = firstChipStyles ? parseFloat(firstChipStyles.borderRadius || '999') * pixelRatio : chipHeight / 2
   const chipValueGap = firstInfoRow ? parseFloat(window.getComputedStyle(firstInfoRow).gap || '8') * pixelRatio : 16
 
   // Row 중심점 계산: 각 row의 높이(chipHeight)를 고려해서 간격 계산
@@ -626,18 +726,20 @@ async function createStoryCardShareImage(card) {
 
   rows.forEach(([label, value], index) => {
     const centerY = rowCenters[index]
-    const chipWidth = drawPillText(ctx, label, chipX, centerY, {
+    const renderedChipWidth = drawPillText(ctx, label, chipX, centerY, {
       font: valueFont,
       textColor: '#ff4093',
       backgroundColor: '#000000',
       horizontalPadding: chipHorizontalPadding,
       height: chipHeight,
+      width: fixedChipWidth,
+      radius: chipRadius,
     })
 
-    const valueX = chipX + chipWidth + chipValueGap
+    const valueX = chipX + renderedChipWidth + chipValueGap
     // CSS 고정값: arrow width 16px
     const arrowSize = index === 2 && arrowImage ? 16 * pixelRatio : 0
-    const maxValueWidth = width - horizontalPadding - valueX - arrowSize
+    const maxValueWidth = width - horizontalPadding - valueX - arrowSize - (arrowSize > 0 ? 2 * pixelRatio : 0)
     ctx.fillStyle = '#131112'
     ctx.font = valueFont
     ctx.textAlign = 'left'
@@ -698,6 +800,35 @@ async function createStoryCardShareImage(card) {
   return canvas.toDataURL('image/png')
 }
 
+async function createStoryCardFinalImage(card) {
+  let lastError = null
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      await waitForStoryCardReady()
+      const imageUrl = await createStoryCardShareImage(card)
+      if (!imageUrl?.startsWith('data:image/png')) {
+        throw new Error('Story card renderer did not return a PNG')
+      }
+
+      console.log('[story-card] Final PNG ready', {
+        attempt,
+        byteLength: imageUrl.length,
+      })
+      return imageUrl
+    } catch (error) {
+      lastError = error
+      console.warn('[story-card] Final PNG attempt failed', {
+        attempt,
+        message: error instanceof Error ? error.message : undefined,
+      })
+      if (attempt < 3) await waitForDelay(attempt * 400)
+    }
+  }
+
+  throw lastError ?? new Error('Story card PNG generation failed')
+}
+
 function XLogo({ size = 20, color = '#131112' }) {
   return (
     <svg
@@ -726,8 +857,10 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const modalRequiredControllerRef = useRef(null)
   const animationEndedRef = useRef(false)
   const drawFailedRef = useRef(false)
+  const finalCardImageRef = useRef({ card: null, url: '' })
+  const finalCardImagePromiseRef = useRef({ card: null, promise: null })
   const isIOS = isIOSDevice()
-  const { saveToGallery, shareImage, shareToTwitter, isSaving, isSharing } =
+  const { saveToGallery, shareImage, shareToTwitter, isMediaBusy } =
     useCardShare()
 
   useEffect(() => subscribeToWebViewAuth(setAuthSnapshot), [])
@@ -797,6 +930,19 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       .then(({ modalRequired }) => {
         setShowGuide(modalRequired)
         setEntered(!modalRequired)
+        if (modalRequired) {
+          window.requestAnimationFrame(() => {
+            confirmAppEvent(normalizedAppEventId).catch((error) => {
+              if (import.meta.env.DEV) {
+                console.warn('[story-card] app event confirm failed', {
+                  status: error?.status,
+                  code: error?.code,
+                  message: error instanceof Error ? error.message : undefined,
+                })
+              }
+            })
+          })
+        }
       })
       .catch((error) => {
         if (error?.name === 'AbortError') return
@@ -827,7 +973,20 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           setSelectedChoice(null)
         }
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        if (error?.name === 'AbortError') return
+        if (error?.status === 401) {
+          postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
+          return
+        }
+        postStorixWebViewMessage({
+          type: 'EVENT_ERROR',
+          payload: {
+            code: error?.code,
+            message: `스토리카드 상태 조회 실패${error?.status ? ` (${error.status})` : ''}`,
+          },
+        })
+      })
       .finally(() => {
         if (statusControllerRef.current === controller) {
           statusControllerRef.current = null
@@ -836,6 +995,11 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
 
     return () => controller.abort()
   }, [entered, authSnapshot.version])
+
+  useEffect(() => {
+    if (!entered || drawnCard) return
+    STORY_CARD_CHOICES.forEach((choice) => preloadStoryCardVideo(choice.videoSrc))
+  }, [entered, drawnCard])
 
   const handleBackdropClick = () => {
     if (guideMode === 'help') {
@@ -858,7 +1022,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }
 
   const handleHelpClick = () => {
-    setGuideMode('help')
+    setGuideMode(showCardFront ? 'resultHelp' : 'help')
     setShowGuide(true)
   }
 
@@ -875,16 +1039,29 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     drawFailedRef.current = false
 
     try {
+      await waitForAnimationFrame()
       const nextCard = await drawStoryCardEvent({ signal: controller.signal })
       setDrawnCard(nextCard)
       if (animationEndedRef.current) {
         setDrawStatus('done')
       }
-    } catch {
+    } catch (error) {
       drawFailedRef.current = true
+      if (error?.status === 401) {
+        postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
+      } else {
+        postStorixWebViewMessage({
+          type: 'EVENT_ERROR',
+          payload: {
+            code: error?.code,
+            message: `스토리카드 발급 실패${error?.status ? ` (${error.status})` : ''}`,
+          },
+        })
+      }
       if (animationEndedRef.current) {
-        setDrawnCard(createFallbackStoryCard())
-        setDrawStatus('done')
+        setSelectedChoice(null)
+        setDrawnCard(null)
+        setDrawStatus('idle')
       }
     } finally {
       if (drawControllerRef.current === controller) {
@@ -897,8 +1074,9 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     animationEndedRef.current = true
 
     if (drawFailedRef.current) {
-      setDrawnCard(createFallbackStoryCard())
-      setDrawStatus('done')
+      setSelectedChoice(null)
+      setDrawnCard(null)
+      setDrawStatus('idle')
       return
     }
 
@@ -907,29 +1085,21 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     }
   }
 
+  const handleAnimationUnavailable = () => {
+    if (animationEndedRef.current) return
+    handleAnimationEnded()
+  }
+
   const captureCard = async () => {
-    // ✅ Canvas 렌더링 방식만 사용 (DOM 변경 없음)
     try {
-      const imageUrl = await createStoryCardShareImage(drawnCard)
-      if (imageUrl) {
-        console.log('[story-card] ✅ Canvas capture success', {
-          urlLength: imageUrl.length,
-          urlPrefix: imageUrl.substring(0, 50)
-        })
-        return imageUrl
-      }
+      return await getFinalCardImage(drawnCard)
     } catch (error) {
-      console.error('[story-card] ❌ Canvas capture failed', {
+      console.error('[story-card] Final PNG unavailable', {
         message: error instanceof Error ? error.message : undefined,
         stack: error instanceof Error ? error.stack : undefined,
       })
-      // Fallback to SVG (rect 방식 제거 - DOM 변경 방지)
-      return createFallbackCardDataUrl(drawnCard)
+      return null
     }
-
-    // 최종 fallback: SVG
-    console.warn('[story-card] ❌ Using fallback SVG')
-    return createFallbackCardDataUrl(drawnCard)
   }
 
   const handleSave = () => {
@@ -954,16 +1124,73 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   const resultDateLabel = formatStoryCardDate(drawnCard?.drawnOn)
   const resultMessageLines =
     Array.isArray(drawnCard?.messageLines) && drawnCard.messageLines.length > 0
-      ? drawnCard.messageLines
+      ? drawnCard.messageLines.map((line) => String(line || '').trim()).filter(Boolean).slice(0, 2)
       : drawnCard?.message
-        ? [drawnCard.message]
+        ? [String(drawnCard.message).trim()].filter(Boolean)
         : []
-  const resultMessage = resultMessageLines.join(' ')
   const luckyWorkId = getLuckyWorkId(drawnCard?.luckyWork)
   const luckyWorkLabel =
     drawnCard?.luckyWork?.title?.trim() ||
     drawnCard?.luckyWork?.displayLabel?.trim() ||
     ''
+
+  const getFinalCardImage = async (card) => {
+    if (!card) throw new Error('Story card data is unavailable')
+    if (finalCardImageRef.current.card === card && finalCardImageRef.current.url) {
+      return finalCardImageRef.current.url
+    }
+    if (
+      finalCardImagePromiseRef.current.card === card &&
+      finalCardImagePromiseRef.current.promise
+    ) {
+      return finalCardImagePromiseRef.current.promise
+    }
+
+    const promise = createStoryCardFinalImage(card)
+    finalCardImagePromiseRef.current = { card, promise }
+
+    try {
+      const url = await promise
+      finalCardImageRef.current = { card, url }
+      return url
+    } finally {
+      if (finalCardImagePromiseRef.current.promise === promise) {
+        finalCardImagePromiseRef.current = { card: null, promise: null }
+      }
+    }
+  }
+
+  useEffect(() => {
+    finalCardImageRef.current = { card: null, url: '' }
+    finalCardImagePromiseRef.current = { card: null, promise: null }
+    if (!showCardFront || !drawnCard) return undefined
+
+    let cancelled = false
+    const card = drawnCard
+    const promise = createStoryCardFinalImage(card)
+    finalCardImagePromiseRef.current = { card, promise }
+
+    promise
+      .then((url) => {
+        if (cancelled) return
+        finalCardImageRef.current = { card, url }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('[story-card] Initial final PNG generation failed', {
+          message: error instanceof Error ? error.message : undefined,
+        })
+      })
+      .finally(() => {
+        if (finalCardImagePromiseRef.current.promise === promise) {
+          finalCardImagePromiseRef.current = { card: null, promise: null }
+        }
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [showCardFront, drawnCard])
 
   // 디버깅 로그
   useEffect(() => {
@@ -1026,7 +1253,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           onClick={closeEventPage}
         >
           <img
-            src={showCardFront ? '/events/story-card/icon-x.png' : '/events/story-card/icon-arrow-back.svg'}
+            src={showCardFront ? '/events/story-card/icon-x.svg' : '/events/story-card/icon-arrow-back.svg'}
             alt=""
             aria-hidden="true"
           />
@@ -1069,6 +1296,19 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                   aria-hidden="true"
                 />
               </button>
+            ))}
+          </div>
+
+          <div className="storyCardVideoPreload" aria-hidden="true">
+            {STORY_CARD_CHOICES.map((choice) => (
+              <video
+                key={choice.videoSrc}
+                src={choice.videoSrc}
+                muted
+                playsInline
+                preload="auto"
+                webkit-playsinline="true"
+              />
             ))}
           </div>
         </section>
@@ -1119,7 +1359,11 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 />
               ) : null}
               <p className="storyCardFrontMessage">
-                {resultMessage || '나만의 스토리 카드'}
+                {resultMessageLines.length > 0
+                  ? resultMessageLines.map((line, index) => (
+                      <span key={`${line}-${index}`}>{line}</span>
+                    ))
+                  : '나만의 스토리 카드'}
               </p>
               <div className="storyCardFrontInfoRows">
                 <div className="storyCardFrontInfoRow">
@@ -1141,7 +1385,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                     <span>{luckyWorkLabel || '-'}</span>
                     {luckyWorkLabel ? (
                       <img
-                        src="/events/story-card/icon-arrow-forward-xsmall.png"
+                        src="/events/story-card/icon-arrow-forward-xsmall.svg"
                         alt=""
                         aria-hidden="true"
                       />
@@ -1157,7 +1401,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
               className="storyCardShareAction"
               type="button"
               onClick={handleSave}
-              disabled={isSaving}
+              disabled={isMediaBusy}
             >
               <span className="storyCardShareActionCircle">
                 <img src="/events/story-card/icon-download.svg" alt="" aria-hidden="true" />
@@ -1168,7 +1412,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
               className="storyCardShareAction"
               type="button"
               onClick={handleShare}
-              disabled={isSharing}
+              disabled={isMediaBusy}
             >
               <span className="storyCardShareActionCircle">
                 <img src="/events/story-card/icon-share.svg" alt="" aria-hidden="true" />
@@ -1180,7 +1424,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 className="storyCardShareAction"
                 type="button"
                 onClick={handleTwitterShare}
-                disabled={isSharing}
+                disabled={isMediaBusy}
               >
                 <span className="storyCardShareActionCircle">
                   <XLogo size={20} color="#ffffff" />
@@ -1202,7 +1446,10 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
             muted
             playsInline
             preload="auto"
+            webkit-playsinline="true"
             onEnded={handleAnimationEnded}
+            onError={handleAnimationUnavailable}
+            onStalled={handleAnimationUnavailable}
           />
         </div>
       ) : null}
@@ -1213,25 +1460,47 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           role="presentation"
           onClick={handleBackdropClick}
         >
-          <section
-            className="storyCardGuideModal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="오늘의 스토리 카드 안내"
-            onClick={(clickEvent) => clickEvent.stopPropagation()}
-          >
-            <img
-              className="storyCardGuideImage"
-              src="/events/story-card/storycard-popup.png?v=20260824"
-              alt="오늘의 스토리 카드 안내"
-            />
-            <button
-              className="storyCardGuideAction"
-              type="button"
-              aria-label="카드 고르러 가기"
-              onClick={handleStartClick}
-            />
-          </section>
+          {guideMode === 'resultHelp' ? (
+            <section
+              className="storyCardGuideModal storyCardGuideModal-result"
+              role="dialog"
+              aria-modal="true"
+              aria-label="오늘의 스토리 카드 안내"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+            >
+              <img
+                className="storyCardGuideImage"
+                src="/events/story-card/popup-ok.png?v=20260901b"
+                alt="오늘의 스토리 카드 안내"
+              />
+              <button
+                className="storyCardGuideAction storyCardGuideAction-result"
+                type="button"
+                aria-label="확인"
+                onClick={handleStartClick}
+              />
+            </section>
+          ) : (
+            <section
+              className="storyCardGuideModal"
+              role="dialog"
+              aria-modal="true"
+              aria-label="오늘의 스토리 카드 안내"
+              onClick={(clickEvent) => clickEvent.stopPropagation()}
+            >
+              <img
+                className="storyCardGuideImage"
+                src="/events/story-card/storycard-popup.png?v=20260824"
+                alt="오늘의 스토리 카드 안내"
+              />
+              <button
+                className="storyCardGuideAction"
+                type="button"
+                aria-label="카드 고르러 가기"
+                onClick={handleStartClick}
+              />
+            </section>
+          )}
         </div>
       ) : null}
 

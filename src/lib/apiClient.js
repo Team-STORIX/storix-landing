@@ -1,26 +1,39 @@
 import {
   clearWebViewAccessToken,
   getWebViewAccessToken,
+  waitForWebViewAccessToken,
 } from './webViewAuth.js'
+import { postStorixWebViewMessage } from './webViewBridge.js'
 
 const viteEnv = import.meta.env || {}
 
 const DEFAULT_API_BASE_URL = viteEnv.DEV
   ? 'https://dev.storix.kr'
-  : 'https://api.storix.kr'
+  : '/api/prod'
+
+function isDevPreviewHost() {
+  if (typeof window === 'undefined') return false
+
+  const hostname = window.location.hostname.toLowerCase()
+  return hostname === 'www-dev.storix.kr' || hostname.includes('-git-dev-')
+}
 
 // URL 쿼리로 API 서버 오버라이드 가능 (예: ?api=dev)
 function getApiBaseUrl() {
   const params = new URLSearchParams(window.location.search)
   const apiParam = params.get('api')
 
-  if (apiParam === 'dev') return 'https://dev.storix.kr'
-  if (apiParam === 'prod') return 'https://api.storix.kr'
+  if (apiParam === 'dev') return viteEnv.DEV ? 'https://dev.storix.kr' : '/api/dev'
+  if (apiParam === 'prod') return viteEnv.DEV ? 'https://api.storix.kr' : '/api/prod'
 
-  return (viteEnv.VITE_API_BASE_URL || DEFAULT_API_BASE_URL).replace(/\/$/, '')
+  if (viteEnv.VITE_API_BASE_URL) return viteEnv.VITE_API_BASE_URL.replace(/\/$/, '')
+  if (isDevPreviewHost()) return '/api/dev'
+
+  return DEFAULT_API_BASE_URL.replace(/\/$/, '')
 }
 
 const API_BASE_URL = getApiBaseUrl()
+let tokenRefreshPromise = null
 
 export class ApiError extends Error {
   constructor(message, { status, code, cause } = {}) {
@@ -36,6 +49,28 @@ export class AuthenticationRequiredError extends ApiError {
     super('로그인이 필요합니다.', { status: 401, code: 'AUTH_REQUIRED' })
     this.name = 'AuthenticationRequiredError'
   }
+}
+
+async function requestAccessTokenRefresh({ expiredToken, signal }) {
+  if (!tokenRefreshPromise) {
+    const sent = postStorixWebViewMessage({ type: 'TOKEN_EXPIRED' })
+
+    if (!sent) {
+      clearWebViewAccessToken()
+      throw new AuthenticationRequiredError()
+    }
+
+    clearWebViewAccessToken()
+    tokenRefreshPromise = waitForWebViewAccessToken({
+      previousToken: expiredToken,
+      signal,
+      timeoutMs: 10000,
+    }).finally(() => {
+      tokenRefreshPromise = null
+    })
+  }
+
+  return tokenRefreshPromise
 }
 
 async function readJson(response) {
@@ -54,7 +89,7 @@ async function readJson(response) {
   }
 }
 
-async function request(path, { method = 'GET', signal, authenticated, body: requestBody }) {
+async function request(path, { method = 'GET', signal, authenticated, body: requestBody, retriedAuth = false }) {
   const token = authenticated ? getWebViewAccessToken() : null
 
   if (authenticated && !token) throw new AuthenticationRequiredError()
@@ -84,8 +119,15 @@ async function request(path, { method = 'GET', signal, authenticated, body: requ
   const body = await readJson(response)
 
   if (!response.ok || body?.isSuccess === false) {
-    if (authenticated && response.status === 401) {
-      clearWebViewAccessToken()
+    if (authenticated && response.status === 401 && !retriedAuth) {
+      await requestAccessTokenRefresh({ expiredToken: token, signal })
+      return request(path, {
+        method,
+        signal,
+        authenticated,
+        body: requestBody,
+        retriedAuth: true,
+      })
     }
 
     throw new ApiError(body?.message || '요청을 처리하지 못했습니다.', {

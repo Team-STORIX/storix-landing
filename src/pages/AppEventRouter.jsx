@@ -10,8 +10,10 @@ import StoryCardEventPage from "./StoryCardEventPage.jsx";
 import "../event-router.css";
 
 const PAGES = {
+  attendance: AttendanceEventPage,
   "attendance-2026-08-10": AttendanceEventPage,
   "attendance-2026-08-17": AttendanceEventPage,
+  "story-card": StoryCardEventPage,
   "story-card-2026-08-16": StoryCardEventPage,
 };
 

@@ -196,7 +196,7 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
   margin-right: auto;
 }
@@ -257,6 +257,10 @@
   line-height: 140%;
 }
 
+.storyCardFrontMessage span {
+  display: block;
+}
+
 .storyCardFrontInfoRows {
   position: absolute;
   right: 16px;
@@ -279,11 +283,12 @@
 .storyCardFrontInfoChip {
   display: inline-flex;
   width: 86px;
+  height: 24px;
+  box-sizing: border-box;
   align-items: center;
   justify-content: center;
-  min-height: 18px;
-  padding: 1px 10px 2px;
-  border-radius: 44.722px;
+  padding: 4px 10px;
+  border-radius: 999px;
   background: var(--Grayscale-black, #000000);
   color: var(--Magenta-300, #ff4093);
   font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
@@ -307,6 +312,7 @@
 
 .storyCardFrontInfoValue {
   justify-self: start;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: left;
@@ -456,9 +462,11 @@
 }
 
 .storyCardShareActionText {
-  color: #131112;
+  color: var(--Grayscale-black, #000);
   text-align: center;
-  font-size: 12px;
+  font-family: 'SUIT', ui-sans-serif, system-ui, sans-serif;
+  font-size: 14px;
+  font-style: normal;
   font-weight: 500;
   line-height: 140%;
   white-space: nowrap;
@@ -560,6 +568,20 @@
   filter: brightness(1.18);
 }
 
+.storyCardVideoPreload {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.storyCardVideoPreload video {
+  width: 1px;
+  height: 1px;
+}
+
 .storyCardStatus {
   min-height: 20px;
   margin-top: clamp(10px, 2.4vh, 22px);
@@ -573,20 +595,25 @@
 
 .storyCardAnimationOverlay {
   position: fixed;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 50%;
   z-index: 12;
   display: flex;
+  width: min(100vw, 480px);
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   background: #000000;
   pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .storyCardAnimationVideo {
   display: block;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
 }
 
 .storyCardGuideBackdrop {
@@ -629,6 +656,16 @@
   border-radius: 8px;
   background: transparent;
   cursor: pointer;
+}
+
+.storyCardGuideModal-result {
+  width: min(306px, calc(100vw - 88px));
+  aspect-ratio: 3 / 4;
+}
+
+.storyCardGuideAction-result {
+  bottom: 9.3%;
+  height: 12%;
 }
 
 .storyCardSaveModalBackdrop {

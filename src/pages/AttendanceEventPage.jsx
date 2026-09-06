@@ -46,7 +46,6 @@ export default function AttendanceEventPage({ appEventId = null }) {
   const [statusError, setStatusError] = useState(null)
   const [checkInFeedback, setCheckInFeedback] = useState(null)
   const checkInControllerRef = useRef(null)
-  const embeddedInStorixApp = isStorixWebView()
 
   useEffect(() => {
     const previousTitle = document.title
@@ -140,6 +139,11 @@ export default function AttendanceEventPage({ appEventId = null }) {
     status.attendedToday
 
   const handleBack = () => {
+    if (isStorixWebView()) {
+      postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
+      return
+    }
+
     if (window.history.length > 1) {
       window.history.back()
       return
@@ -211,20 +215,18 @@ export default function AttendanceEventPage({ appEventId = null }) {
 
   return (
     <main className="attendanceEventPage">
-      {!embeddedInStorixApp && (
-        <header className="attendanceHeader">
-          <button
-            className="attendanceBackButton"
-            type="button"
-            onClick={handleBack}
-            aria-label="뒤로가기"
-          >
-            <img src="/events/attendance/back.svg" alt="" />
-          </button>
-          <h1>앱 런칭 기념 출석 이벤트</h1>
-          <span className="attendanceHeaderSpacer" aria-hidden="true" />
-        </header>
-      )}
+      <header className="attendanceHeader">
+        <button
+          className="attendanceBackButton"
+          type="button"
+          onClick={handleBack}
+          aria-label="뒤로가기"
+        >
+          <img src="/events/attendance/back.svg" alt="" />
+        </button>
+        <h1>앱 런칭 기념 출석 이벤트</h1>
+        <span className="attendanceHeaderSpacer" aria-hidden="true" />
+      </header>
 
       <section className="attendanceStampSection">
         <img

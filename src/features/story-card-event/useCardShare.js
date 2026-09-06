@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import {
   createProfileCardShare,
   postProfileCardImagePresignedUrl,
@@ -16,6 +16,7 @@ const TWITTER_WEB_INTENT_URL = 'https://twitter.com/intent/tweet'
 export function useCardShare() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
+  const mediaRequestInFlightRef = useRef(false)
 
   const saveToGallery = useCallback(async (
     captureImage,
@@ -23,6 +24,9 @@ export function useCardShare() {
     message = SHARE_MESSAGE,
     analytics,
   ) => {
+    if (mediaRequestInFlightRef.current) return
+    mediaRequestInFlightRef.current = true
+
     try {
       setIsSaving(true)
 
@@ -48,6 +52,7 @@ export function useCardShare() {
       window.alert('이미지 저장 중 오류가 발생했습니다.')
     } finally {
       setIsSaving(false)
+      mediaRequestInFlightRef.current = false
     }
   }, [])
 
@@ -56,6 +61,9 @@ export function useCardShare() {
     message = SHARE_MESSAGE,
     analytics,
   ) => {
+    if (mediaRequestInFlightRef.current) return
+    mediaRequestInFlightRef.current = true
+
     try {
       setIsSharing(true)
 
@@ -104,6 +112,7 @@ export function useCardShare() {
       window.alert('이미지 공유 중 오류가 발생했습니다.')
     } finally {
       setIsSharing(false)
+      mediaRequestInFlightRef.current = false
     }
   }, [])
 
@@ -112,6 +121,9 @@ export function useCardShare() {
     message = SHARE_MESSAGE,
     analytics,
   ) => {
+    if (mediaRequestInFlightRef.current) return
+    mediaRequestInFlightRef.current = true
+
     try {
       setIsSharing(true)
 
@@ -131,6 +143,7 @@ export function useCardShare() {
       openTwitterWebIntent(undefined, message)
     } finally {
       setIsSharing(false)
+      mediaRequestInFlightRef.current = false
     }
   }, [])
 
@@ -140,6 +153,7 @@ export function useCardShare() {
     shareToTwitter,
     isSaving,
     isSharing,
+    isMediaBusy: isSaving || isSharing,
   }
 }
 
@@ -167,7 +181,6 @@ function shareImageWithNativeBridge(image, message, target) {
 
 function getNativeImagePayload(image) {
   if (typeof image === 'string') return { uri: image }
-  if (image?.rect) return { rect: image.rect }
   return null
 }
 
@@ -181,7 +194,6 @@ function sendImageActionWithNativeBridge(type, resultType, payload) {
       window.removeEventListener('message', handleMessage)
       window.removeEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
       window.clearTimeout(timeoutId)
-      payload.cleanup?.()
     }
 
     const handleResult = (rawData) => {
@@ -222,7 +234,7 @@ function sendImageActionWithNativeBridge(type, resultType, payload) {
 
     const sent = postStorixWebViewMessage({
       type,
-      payload: { requestId, ...withoutCleanup(payload) },
+      payload: { requestId, ...payload },
     })
 
     if (!sent) {
@@ -230,11 +242,6 @@ function sendImageActionWithNativeBridge(type, resultType, payload) {
       reject(new Error('Native bridge unavailable'))
     }
   })
-}
-
-function withoutCleanup(payload) {
-  const { cleanup, ...nativePayload } = payload
-  return nativePayload
 }
 
 function downloadUri(uri, filename) {

@@ -20,6 +20,61 @@ function assertBoolean(value, field) {
   return value
 }
 
+function pickString(value, fields) {
+  for (const field of fields) {
+    const candidate = value?.[field]
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim()
+    }
+  }
+  return ''
+}
+
+function pickBoolean(value, fields, fallback = false) {
+  for (const field of fields) {
+    const candidate = value?.[field]
+    if (typeof candidate === 'boolean') return candidate
+  }
+  return fallback
+}
+
+function getImageCandidates(value) {
+  const images =
+    value?.images ??
+    value?.imageUrls ??
+    value?.cardImages ??
+    value?.storyCardImages ??
+    []
+
+  if (!Array.isArray(images)) return []
+
+  return images
+    .map((image) => {
+      if (typeof image === 'string') return image
+      if (!image || typeof image !== 'object') return ''
+      return pickString(image, ['url', 'imageUrl', 'src', 'fileUrl'])
+    })
+    .filter(Boolean)
+}
+
+function unwrapStoryCardResult(result) {
+  if (!result || typeof result !== 'object') return result
+
+  const nested =
+    result.card ??
+    result.storyCard ??
+    result.storyCardResult ??
+    result.drawnCard ??
+    result.data
+
+  return nested && typeof nested === 'object'
+    ? {
+        ...result,
+        ...nested,
+      }
+    : result
+}
+
 function assertNullableCard(value) {
   if (value == null) return null
   return parseStoryCard(value)
@@ -32,41 +87,44 @@ function parseLuckyWork(value) {
 
   return {
     worksId: Number.isSafeInteger(worksId) && worksId > 0 ? worksId : null,
-    displayLabel: typeof value.displayLabel === 'string' ? value.displayLabel : '',
-    worksType: typeof value.worksType === 'string' ? value.worksType : '',
-    title: typeof value.title === 'string' ? value.title : '',
-    platform: typeof value.platform === 'string' ? value.platform : '',
-    landingUrl: typeof value.landingUrl === 'string' ? value.landingUrl : '',
+    displayLabel: pickString(value, ['displayLabel', 'worksName', 'workName', 'title', 'name']),
+    worksType: pickString(value, ['worksType', 'workType', 'type']),
+    title: pickString(value, ['title', 'worksName', 'workName', 'name', 'displayLabel']),
+    platform: pickString(value, ['platform', 'platformName']),
+    landingUrl: pickString(value, ['landingUrl', 'url', 'link']),
   }
 }
 
 function parseStoryCard(result) {
-  if (!result || typeof result !== 'object') {
+  const cardResult = unwrapStoryCardResult(result)
+
+  if (!cardResult || typeof cardResult !== 'object') {
     throw new ApiError('스토리 카드 응답이 올바르지 않습니다.', {
       code: 'INVALID_RESPONSE',
     })
   }
 
+  const imageCandidates = getImageCandidates(cardResult)
+  const drawnOn = pickString(cardResult, ['drawnOn', 'drawDate', 'drawnDate', 'serviceDate', 'date', 'createdAt'])
+  const genre = pickString(cardResult, ['genre', 'genreName', 'category', 'categoryName'])
+  const immersion = pickString(cardResult, ['immersion', 'immersionLevel', 'immersionPower', 'mood'])
+
   return {
-    drawnOn: assertString(result.drawnOn, 'drawnOn'),
-    alreadyDrawn: assertBoolean(result.alreadyDrawn, 'alreadyDrawn'),
-    genre: assertString(result.genre, 'genre'),
-    aiImageUrl: typeof result.aiImageUrl === 'string' ? result.aiImageUrl : '',
+    drawnOn,
+    alreadyDrawn: pickBoolean(cardResult, ['alreadyDrawn', 'drawnToday', 'isDrawn'], true),
+    genre,
+    aiImageUrl: pickString(cardResult, ['aiImageUrl', 'mainImageUrl', 'imageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
     backgroundImageUrl:
-      typeof result.backgroundImageUrl === 'string' ? result.backgroundImageUrl : '',
-    iconImageUrl: typeof result.iconImageUrl === 'string' ? result.iconImageUrl : '',
+      pickString(cardResult, ['backgroundImageUrl', 'backgroundUrl', 'bgImageUrl']) || imageCandidates[1] || '',
+    iconImageUrl: pickString(cardResult, ['iconImageUrl', 'iconUrl', 'badgeImageUrl']) || imageCandidates[2] || '',
     imageUrl:
-      typeof result.imageUrl === 'string'
-        ? result.imageUrl
-        : typeof result.aiImageUrl === 'string'
-          ? result.aiImageUrl
-          : '',
-    message: typeof result.message === 'string' ? result.message : '',
-    messageLines: Array.isArray(result.messageLines)
-      ? result.messageLines.filter((line) => typeof line === 'string')
+      pickString(cardResult, ['imageUrl', 'aiImageUrl', 'mainImageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
+    message: pickString(cardResult, ['message', 'description', 'summary']),
+    messageLines: Array.isArray(cardResult.messageLines)
+      ? cardResult.messageLines.filter((line) => typeof line === 'string')
       : [],
-    immersion: typeof result.immersion === 'string' ? result.immersion : '',
-    luckyWork: parseLuckyWork(result.luckyWork),
+    immersion,
+    luckyWork: parseLuckyWork(cardResult.luckyWork ?? cardResult.work ?? cardResult.works ?? cardResult.recommendedWork),
   }
 }
 
@@ -77,6 +135,14 @@ function parseStoryCardStatus(result) {
     })
   }
 
+  const card =
+    result.card ??
+    result.storyCard ??
+    result.storyCardResult ??
+    result.drawnCard ??
+    result.data ??
+    null
+
   return {
     appEventId: typeof result.appEventId === 'number' ? result.appEventId : null,
     eventStartDate: assertString(result.eventStartDate, 'eventStartDate'),
@@ -84,7 +150,7 @@ function parseStoryCardStatus(result) {
     serviceDate: assertString(result.serviceDate, 'serviceDate'),
     eventActive: assertBoolean(result.eventActive, 'eventActive'),
     drawnToday: assertBoolean(result.drawnToday, 'drawnToday'),
-    card: assertNullableCard(result.card),
+    card: assertNullableCard(card),
   }
 }
 
@@ -112,6 +178,20 @@ export async function getAppEventModalRequired(appEventId, { signal } = {}) {
     signal,
   })
   return parseModalRequired(result)
+}
+
+export async function confirmAppEvent(appEventId, { signal } = {}) {
+  const eventId = Number(appEventId)
+  if (!Number.isSafeInteger(eventId) || eventId <= 0) {
+    throw new ApiError('???대깽??ID媛 ?щ컮瑜댁? ?딆뒿?덈떎.', {
+      code: 'INVALID_APP_EVENT_ID',
+    })
+  }
+
+  await apiRequest(`/api/v1/app-events/${eventId}/confirm`, {
+    method: 'PATCH',
+    signal,
+  })
 }
 
 export async function getStoryCardEventStatus({ signal } = {}) {
