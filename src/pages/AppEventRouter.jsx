@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { getPublicAppEvent } from "../features/app-event/api.js";
 import { ApiError } from "../lib/apiClient.js";
-import {
-  isStorixWebView,
-  postStorixWebViewMessage,
-} from "../lib/webViewBridge.js";
+import { closeEventPage } from "../lib/webViewBridge.js";
 import AttendanceEventPage from "./AttendanceEventPage.jsx";
 import StoryCardEventPage from "./StoryCardEventPage.jsx";
 import "../event-router.css";
 
+/** 관리자에서 등록한 pageKey → 페이지. 없으면 eventType 기본 페이지로 간다. */
 const PAGES = {
   attendance: AttendanceEventPage,
   "attendance-2026-08-10": AttendanceEventPage,
@@ -22,6 +20,7 @@ const DEFAULT_BY_TYPE = {
   STORY_CARD: StoryCardEventPage,
 };
 
+/** API 조회 없이 바로 열리는 고정 이벤트 */
 const STATIC_EVENTS = {
   7: {
     id: 7,
@@ -35,19 +34,7 @@ const STATIC_EVENTS = {
   },
 };
 
-function closeEventPage() {
-  if (isStorixWebView()) {
-    postStorixWebViewMessage({ type: "CLOSE_WEBVIEW" });
-    return;
-  }
-
-  if (window.history.length > 1) {
-    window.history.back();
-    return;
-  }
-
-  window.location.assign("/");
-}
+const handleClose = () => closeEventPage();
 
 function EventStatePage({ title, description, actionLabel = "확인" }) {
   return (
@@ -58,7 +45,7 @@ function EventStatePage({ title, description, actionLabel = "확인" }) {
         </div>
         <h1>{title}</h1>
         <p>{description}</p>
-        <button type="button" onClick={closeEventPage}>
+        <button type="button" onClick={handleClose}>
           {actionLabel}
         </button>
       </section>
@@ -108,7 +95,7 @@ function EventEndedPage() {
               <p id="event-ended-description">다음 이벤트를 기대해주세요!</p>
             </div>
           </div>
-          <button type="button" onClick={closeEventPage}>
+          <button type="button" onClick={handleClose}>
             확인
           </button>
         </section>
@@ -126,12 +113,20 @@ function EventFallbackPage() {
   );
 }
 
-export default function AppEventRouter({ appEventId }) {
-  const [state, setState] = useState({
-    status: "loading",
-    event: null,
-    error: null,
-  });
+function EventLoadingPage() {
+  return (
+    <main className="eventStatePage">
+      <div
+        className="eventLoading"
+        role="status"
+        aria-label="이벤트 불러오는 중"
+      />
+    </main>
+  );
+}
+
+function useAppEvent(appEventId) {
+  const [state, setState] = useState({ status: "loading", event: null, error: null });
 
   useEffect(() => {
     const staticEvent = STATIC_EVENTS[appEventId];
@@ -153,21 +148,18 @@ export default function AppEventRouter({ appEventId }) {
     return () => controller.abort();
   }, [appEventId]);
 
-  if (state.status === "loading") {
-    return (
-      <main className="eventStatePage">
-        <div
-          className="eventLoading"
-          role="status"
-          aria-label="이벤트 불러오는 중"
-        />
-      </main>
-    );
+  return state;
+}
+
+export default function AppEventRouter({ appEventId }) {
+  const { status, event, error } = useAppEvent(appEventId);
+
+  if (status === "loading") {
+    return <EventLoadingPage />;
   }
 
-  if (state.status === "error") {
-    const isNotFound =
-      state.error instanceof ApiError && state.error.status === 404;
+  if (status === "error") {
+    const isNotFound = error instanceof ApiError && error.status === 404;
     if (!isNotFound) return <EventErrorToast />;
 
     return (
@@ -177,8 +169,6 @@ export default function AppEventRouter({ appEventId }) {
       />
     );
   }
-
-  const event = state.event;
 
   if (event.status === "ENDED" || event.status === "CANCELED") {
     return <EventEndedPage />;

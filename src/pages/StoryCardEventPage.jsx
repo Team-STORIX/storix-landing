@@ -4,8 +4,10 @@ import {
   subscribeToWebViewAuth,
 } from '../lib/webViewAuth.js'
 import {
+  closeEventPage,
   isStorixWebView,
   postStorixWebViewMessage,
+  reportEventError,
 } from '../lib/webViewBridge.js'
 import {
   confirmAppEvent,
@@ -14,14 +16,31 @@ import {
   getStoryCardEventStatus,
   searchStoryCardLuckyWorkId,
 } from '../features/story-card-event/api.js'
+import {
+  formatStoryCardDate,
+  getLuckyWorkId,
+  getLuckyWorkLabel,
+  getStoryCardMessageLines,
+  STORY_CARD_FALLBACK_MESSAGE,
+} from '../features/story-card-event/storyCard.js'
+import {
+  createStoryCardFinalImage,
+  waitForAnimationFrame,
+} from '../features/story-card-event/storyCardImage.js'
 import { useCardShare } from '../features/story-card-event/useCardShare.js'
 import '../story-card-event.css'
+
+const SHARE_MESSAGE = 'STORIX 오늘의 스토리 카드'
+const DOCUMENT_TITLE = '오늘의 스토리 카드 이벤트 | STORIX'
+const DOCUMENT_CLASS = 'storyCardDocument'
 
 const STORY_CARD_CHOICES = [
   { key: 'left', label: '왼쪽 카드', videoSrc: '/events/story-card/left.mp4?v=20260902' },
   { key: 'center', label: '가운데 카드', videoSrc: '/events/story-card/centre.mp4?v=20260902' },
   { key: 'right', label: '오른쪽 카드', videoSrc: '/events/story-card/right.mp4?v=20260902' },
 ]
+
+const isDev = import.meta.env.DEV
 
 const preloadedVideoSources = new Set()
 
@@ -36,798 +55,13 @@ function preloadStoryCardVideo(src) {
   document.head.appendChild(link)
 }
 
-function waitForAnimationFrame() {
-  return new Promise((resolve) => {
-    window.requestAnimationFrame(() => resolve())
-  })
-}
-
-function closeEventPage() {
-  if (isStorixWebView()) {
-    postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
-    return
-  }
-
-  window.location.assign('/')
-}
-
-function decodeBase64Url(value) {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = window.atob(padded)
-  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0))
-  return new TextDecoder().decode(bytes)
-}
-
-function hashString(value) {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
-  }
-  return Math.abs(hash).toString(36)
-}
-
-function getAccountStorageKeyPart(accessToken) {
-  if (!accessToken) return 'anonymous'
-
-  try {
-    const [, payload] = accessToken.split('.')
-    if (payload) {
-      const claims = JSON.parse(decodeBase64Url(payload))
-      const accountId =
-        claims.userId ??
-        claims.memberId ??
-        claims.accountId ??
-        claims.id ??
-        claims.sub
-
-      if (accountId != null) return String(accountId)
-    }
-  } catch {
-    // Fall back to a stable local token hash until the account-level API lands.
-  }
-
-  return `token-${hashString(accessToken)}`
-}
-
 function isIOSDevice() {
   if (typeof navigator === 'undefined') return false
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
 }
 
-function createFallbackStoryCard() {
-  return {
-    drawnOn: '',
-    alreadyDrawn: false,
-    genre: '오늘의 카드',
-    aiImageUrl: '',
-    backgroundImageUrl: '',
-    iconImageUrl: '',
-    imageUrl: '',
-    message: '나만의 스토리 카드',
-    messageLines: [],
-    immersion: '',
-    luckyWork: null,
-  }
-}
-
-function formatStoryCardDate(value) {
-  if (typeof value !== 'string' || !value.trim()) return ''
-
-  const [year, month, day] = value.trim().slice(0, 10).split('-').map(Number)
-  if (!year || !month || !day) return ''
-
-  const date = new Date(year, month - 1, day)
-  if (Number.isNaN(date.getTime())) return ''
-
-  const weekday = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][date.getDay()]
-  return `${month}.${String(day).padStart(2, '0')} ${weekday}`
-}
-
-function getLuckyWorkId(luckyWork) {
-  if (!luckyWork) return null
-  const directId = Number(luckyWork.worksId ?? luckyWork.workId ?? luckyWork.id)
-  if (Number.isSafeInteger(directId) && directId > 0) {
-    return directId
-  }
-
-  const landingUrl = luckyWork.landingUrl?.trim()
-  if (!landingUrl) return null
-
-  try {
-    const url = new URL(landingUrl)
-    const queryId = Number(url.searchParams.get('worksId') || url.searchParams.get('workId') || url.searchParams.get('id'))
-    if (Number.isSafeInteger(queryId) && queryId > 0) return queryId
-
-    const pathname = url.pathname
-    const match = pathname.match(/\/works?\/(\d+)/)
-    if (!match) return null
-
-    const worksId = Number(match[1])
-    return Number.isSafeInteger(worksId) && worksId > 0 ? worksId : null
-  } catch {
-    const match = landingUrl.match(/\/works?\/(\d+)/)
-    if (!match) return null
-
-    const worksId = Number(match[1])
-    return Number.isSafeInteger(worksId) && worksId > 0 ? worksId : null
-  }
-}
-
-function waitForDelay(milliseconds) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds))
-}
-
-function waitForImageElement(image) {
-  if (image.complete) {
-    if (image.naturalWidth <= 0) {
-      return Promise.reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
-    }
-    return image.decode?.().catch(() => undefined) ?? Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    const timeoutId = window.setTimeout(() => {
-      cleanup()
-      reject(new Error(`Displayed image timed out: ${image.currentSrc || image.src}`))
-    }, 10000)
-
-    const cleanup = () => {
-      window.clearTimeout(timeoutId)
-      image.removeEventListener('load', handleLoad)
-      image.removeEventListener('error', handleError)
-    }
-    const handleLoad = async () => {
-      cleanup()
-      try {
-        await image.decode?.()
-        resolve()
-      } catch (error) {
-        reject(error)
-      }
-    }
-    const handleError = () => {
-      cleanup()
-      reject(new Error(`Displayed image failed to load: ${image.currentSrc || image.src}`))
-    }
-
-    image.addEventListener('load', handleLoad, { once: true })
-    image.addEventListener('error', handleError, { once: true })
-  })
-}
-
-async function waitForStoryCardReady() {
-  await document.fonts?.ready
-
-  const cardElement = document.querySelector('.storyCardFront')
-  if (!cardElement) throw new Error('Story card element is unavailable')
-
-  const displayedImages = Array.from(cardElement.querySelectorAll('img'))
-  await Promise.all(displayedImages.map(waitForImageElement))
-  await waitForAnimationFrame()
-  await waitForAnimationFrame()
-}
-
-function loadCanvasImage(src) {
-  if (!src) return Promise.resolve(null)
-
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    image.crossOrigin = 'anonymous'
-    image.onload = async () => {
-      try {
-        await image.decode?.()
-        resolve(image)
-      } catch (error) {
-        reject(error)
-      }
-    }
-    image.onerror = reject
-    image.src = src
-  })
-}
-
-function convertImagesWithNativeBridge(entries) {
-  if (!isStorixWebView() || entries.length === 0) {
-    return Promise.resolve({ success: true, images: {}, errors: [] })
-  }
-
-  return new Promise((resolve, reject) => {
-    const requestId = `story-card-images-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}`
-
-    const cleanup = () => {
-      window.removeEventListener('message', handleMessage)
-      window.removeEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
-      window.clearTimeout(timeoutId)
-    }
-
-    const handleResult = (rawData) => {
-      try {
-        const message =
-          typeof rawData === 'string' ? JSON.parse(rawData) : rawData
-        if (
-          message?.type !== 'CONVERT_STORY_CARD_IMAGES_RESULT' ||
-          message?.payload?.requestId !== requestId
-        ) {
-          return
-        }
-
-        const images = message.payload.images && typeof message.payload.images === 'object'
-          ? message.payload.images
-          : {}
-        const errors = Array.isArray(message.payload.errors) ? message.payload.errors : []
-        const missingKeys = entries
-          .map(({ key }) => key)
-          .filter((key) => typeof images[key] !== 'string' || !images[key])
-
-        cleanup()
-        resolve({
-          success: message.payload.success !== false && errors.length === 0 && missingKeys.length === 0,
-          images,
-          errors: [
-            ...errors,
-            ...missingKeys.map((key) => ({ key, code: 'IMAGE_RESULT_MISSING' })),
-          ],
-        })
-      } catch {
-        // Ignore unrelated bridge messages.
-      }
-    }
-
-    function handleMessage(event) {
-      handleResult(event.data)
-    }
-
-    function handleNativeMessage(event) {
-      handleResult(event.detail)
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('Native image conversion timed out'))
-    }, 30000)
-
-    window.addEventListener('message', handleMessage)
-    window.addEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
-
-    const sent = postStorixWebViewMessage({
-      type: 'CONVERT_STORY_CARD_IMAGES',
-      payload: { requestId, images: entries },
-    })
-
-    if (!sent) {
-      cleanup()
-      reject(new Error('Native image conversion bridge unavailable'))
-    }
-  })
-}
-
-async function fetchImageAsDataUrl(src) {
-  if (!src || src.startsWith('data:image/')) return src
-
-  const response = await fetch(src)
-  if (!response.ok) throw new Error(`Image fetch failed: ${response.status}`)
-  const blob = await response.blob()
-
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
-    reader.onerror = reject
-    reader.readAsDataURL(blob)
-  })
-}
-
-async function resolveCanvasImageSources(card) {
-  const sources = {
-    topBackground: '/events/story-card/top-background.png',
-    aiImage: card.aiImageUrl?.trim() || card.imageUrl?.trim() || '',
-    bodyBackground: card.backgroundImageUrl?.trim() || '',
-    iconImage: card.iconImageUrl?.trim() || '',
-    arrowImage: '/events/story-card/icon-arrow-forward-xsmall.svg',
-  }
-
-  console.log('[story-card] Image sources', {
-    topBackground: sources.topBackground,
-    aiImage: sources.aiImage?.substring(0, 100),
-    bodyBackground: sources.bodyBackground?.substring(0, 100),
-    iconImage: sources.iconImage?.substring(0, 100),
-    cardData: {
-      aiImageUrl: card.aiImageUrl?.substring(0, 100),
-      imageUrl: card.imageUrl?.substring(0, 100),
-      backgroundImageUrl: card.backgroundImageUrl?.substring(0, 100),
-    },
-  })
-
-  const remoteEntries = Object.entries(sources)
-    .filter(([, url]) => /^https?:\/\//i.test(url))
-    .map(([key, url]) => ({ key, url }))
-
-  const nativeResult = await convertImagesWithNativeBridge(remoteEntries)
-
-  // 부분 성공 허용: 성공한 이미지는 사용하고, 실패한 것만 fetch로 재시도
-  const resolvedEntries = await Promise.all(
-    Object.entries(sources).map(async ([key, url]) => {
-      if (!url) return [key, '']
-      if (nativeResult.images[key]) return [key, nativeResult.images[key]]
-      return [key, await fetchImageAsDataUrl(url)]
-    }),
-  )
-
-  return Object.fromEntries(resolvedEntries)
-}
-
-function drawRoundedRect(ctx, x, y, width, height, radii) {
-  const maxRadius = Math.max(0, Math.min(width, height) / 2)
-  const clampRadius = (value) => Math.min(Math.max(Number(value) || 0, 0), maxRadius)
-  const radius = {
-    topLeft: 0,
-    topRight: 0,
-    bottomRight: 0,
-    bottomLeft: 0,
-    ...(typeof radii === 'number'
-      ? {
-          topLeft: radii,
-          topRight: radii,
-          bottomRight: radii,
-          bottomLeft: radii,
-        }
-      : radii),
-  }
-  radius.topLeft = clampRadius(radius.topLeft)
-  radius.topRight = clampRadius(radius.topRight)
-  radius.bottomRight = clampRadius(radius.bottomRight)
-  radius.bottomLeft = clampRadius(radius.bottomLeft)
-
-  ctx.beginPath()
-  ctx.moveTo(x + radius.topLeft, y)
-  ctx.lineTo(x + width - radius.topRight, y)
-  ctx.quadraticCurveTo(x + width, y, x + width, y + radius.topRight)
-  ctx.lineTo(x + width, y + height - radius.bottomRight)
-  ctx.quadraticCurveTo(
-    x + width,
-    y + height,
-    x + width - radius.bottomRight,
-    y + height,
-  )
-  ctx.lineTo(x + radius.bottomLeft, y + height)
-  ctx.quadraticCurveTo(x, y + height, x, y + height - radius.bottomLeft)
-  ctx.lineTo(x, y + radius.topLeft)
-  ctx.quadraticCurveTo(x, y, x + radius.topLeft, y)
-  ctx.closePath()
-}
-
-function drawImageCover(ctx, image, x, y, width, height) {
-  if (!image) return
-
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
-  const drawWidth = image.naturalWidth * scale
-  const drawHeight = image.naturalHeight * scale
-  ctx.drawImage(
-    image,
-    x + (width - drawWidth) / 2,
-    y + (height - drawHeight) / 2,
-    drawWidth,
-    drawHeight,
-  )
-}
-
-function drawImageContainBottom(ctx, image, x, y, width, height) {
-  if (!image) return
-
-  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight)
-  const drawWidth = image.naturalWidth * scale
-  const drawHeight = image.naturalHeight * scale
-  ctx.drawImage(image, x + (width - drawWidth) / 2, y + height - drawHeight, drawWidth, drawHeight)
-}
-
-function drawTextLine(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
-  const words = String(text || '').split(/\s+/).filter(Boolean)
-  const lines = []
-  let line = ''
-
-  words.forEach((word) => {
-    const nextLine = line ? `${line} ${word}` : word
-    if (ctx.measureText(nextLine).width <= maxWidth || !line) {
-      line = nextLine
-      return
-    }
-    lines.push(line)
-    line = word
-  })
-  if (line) lines.push(line)
-
-  const visibleLines = lines.slice(0, maxLines)
-  if (lines.length > maxLines && visibleLines.length > 0) {
-    const lastIndex = visibleLines.length - 1
-    let truncated = visibleLines[lastIndex]
-    while (truncated.length > 0 && ctx.measureText(`${truncated}...`).width > maxWidth) {
-      truncated = truncated.slice(0, -1)
-    }
-    visibleLines[lastIndex] = `${truncated}...`
-  }
-
-  const startY = y - ((visibleLines.length - 1) * lineHeight) / 2
-  visibleLines.forEach((visibleLine, index) => {
-    ctx.fillText(visibleLine, x, startY + index * lineHeight)
-  })
-}
-
-function drawTextLines(ctx, lines, x, y, maxWidth, lineHeight, maxLines = 2) {
-  const visibleLines = lines
-    .map((line) => String(line || '').trim())
-    .filter(Boolean)
-    .slice(0, maxLines)
-
-  const startY = y - ((visibleLines.length - 1) * lineHeight) / 2
-  visibleLines.forEach((visibleLine, index) => {
-    drawTextLine(ctx, visibleLine, x, startY + index * lineHeight, maxWidth, lineHeight, 1)
-  })
-}
-
-function drawPillText(ctx, text, x, centerY, options) {
-  const {
-    font,
-    textColor,
-    backgroundColor,
-    horizontalPadding,
-    height,
-    width: fixedWidth,
-    radius,
-  } = options
-  ctx.font = font
-  const width = fixedWidth ?? Math.ceil(ctx.measureText(text).width + horizontalPadding * 2)
-  drawRoundedRect(ctx, x, centerY - height / 2, width, height, radius ?? height / 2)
-  ctx.fillStyle = backgroundColor
-  ctx.fill()
-  ctx.fillStyle = textColor
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.fillText(text, x + width / 2, centerY + 1)
-  return width
-}
-
-function drawEllipsizedText(ctx, text, x, y, maxWidth) {
-  let output = String(text || '-')
-  while (output.length > 1 && ctx.measureText(output).width > maxWidth) {
-    output = output.slice(0, -1)
-  }
-  if (output !== text && output.length > 3) {
-    output = `${output.slice(0, -3)}...`
-  }
-  ctx.fillText(output, x, y)
-}
-
-async function createStoryCardShareImage(card) {
-  if (!card) return null
-
-  await document.fonts?.ready
-
-  // 실제 DOM에서 크기 읽기
-  const cardElement = document.querySelector('.storyCardFront')
-  if (!cardElement) {
-    console.warn('[story-card] Card element not found for measurement')
-    return null
-  }
-
-  const cardRect = cardElement.getBoundingClientRect()
-  const actualCardWidth = cardRect.width
-  const actualCardHeight = cardRect.height
-
-  // 고해상도를 위해 2배 스케일
-  const pixelRatio = 2
-  const width = Math.round(actualCardWidth * pixelRatio)
-  const height = Math.round(actualCardHeight * pixelRatio)
-
-  // 실제 DOM 요소들의 크기 읽기
-  const heroElement = cardElement.querySelector('.storyCardFrontHero')
-  const blackBoxElement = cardElement.querySelector('.storyCardFrontBlackBox')
-  const bodyElement = cardElement.querySelector('.storyCardFrontBody')
-
-  const heroHeight = heroElement ? Math.round(heroElement.getBoundingClientRect().height * pixelRatio) : 0
-  const blackBoxHeight = blackBoxElement ? Math.round(blackBoxElement.getBoundingClientRect().height * pixelRatio) : 0
-  const bodyHeight = bodyElement ? Math.round(bodyElement.getBoundingClientRect().height * pixelRatio) : 0
-
-  // 실제 CSS에서 계산된 border-radius 읽기
-  const cardStyles = window.getComputedStyle(cardElement)
-  const cardRadius = parseFloat(cardStyles.borderRadius || '20') * pixelRatio
-  const sectionRadius = 16 * pixelRatio  // CSS에서 고정값
-
-  const canvas = document.createElement('canvas')
-  canvas.width = width
-  canvas.height = height
-
-  const ctx = canvas.getContext('2d')
-  if (!ctx) return null
-
-  const imageSources = await resolveCanvasImageSources(card)
-  const [
-    topBackground,
-    aiImage,
-    bodyBackground,
-    iconImage,
-    arrowImage,
-  ] = await Promise.all([
-    loadCanvasImage(imageSources.topBackground),
-    loadCanvasImage(imageSources.aiImage),
-    loadCanvasImage(imageSources.bodyBackground),
-    loadCanvasImage(imageSources.iconImage),
-    loadCanvasImage(imageSources.arrowImage),
-  ])
-
-  ctx.save()
-  drawRoundedRect(ctx, 0, 0, width, height, cardRadius)
-  ctx.clip()
-
-  ctx.fillStyle = '#ffffff'
-  ctx.fillRect(0, 0, width, height)
-
-  // ✅ Hero 영역 전체(핑크 배경 + 이미지들)에 하단 라운딩 적용
-  ctx.save()
-  drawRoundedRect(ctx, 0, 0, width, heroHeight, {
-    topLeft: 0,
-    topRight: 0,
-    bottomRight: sectionRadius,
-    bottomLeft: sectionRadius,
-  })
-  ctx.clip()
-
-  // 핑크색 배경
-  ctx.fillStyle = '#ff4093'
-  ctx.fillRect(0, 0, width, heroHeight)
-
-  // 배경 이미지
-  drawImageCover(ctx, topBackground, 0, 0, width, heroHeight)
-
-  // AI 이미지
-  drawImageContainBottom(ctx, aiImage, 0, 0, width, heroHeight)
-
-  ctx.restore()
-
-  const blackY = heroHeight
-  drawRoundedRect(ctx, 0, blackY, width, blackBoxHeight, {
-    topLeft: sectionRadius,
-    topRight: sectionRadius,
-    bottomRight: 0,
-    bottomLeft: 0,
-  })
-  ctx.fillStyle = '#131112'
-  ctx.fill()
-
-  const dateLabel = formatStoryCardDate(card.drawnOn)
-
-  // 실제 DOM에서 스타일 읽기
-  const blackBoxStyles = blackBoxElement ? window.getComputedStyle(blackBoxElement) : null
-  const dateTextElement = cardElement.querySelector('.storyCardFrontDateText strong')
-  const subtitleElement = cardElement.querySelector('.storyCardFrontDateText span')
-
-  const horizontalPadding = blackBoxStyles ? parseFloat(blackBoxStyles.paddingLeft || '16') * pixelRatio : 32
-  const textX = horizontalPadding
-
-  const dateFontSize = dateTextElement ? parseFloat(window.getComputedStyle(dateTextElement).fontSize || '22') * pixelRatio : 44
-  const subtitleFontSize = subtitleElement ? parseFloat(window.getComputedStyle(subtitleElement).fontSize || '14') * pixelRatio : 28
-
-  ctx.fillStyle = '#ffffff'
-  ctx.textAlign = 'left'
-  ctx.textBaseline = 'top'
-
-  // 실제 DOM에서 gap 읽기
-  const dateTextWrapper = cardElement.querySelector('.storyCardFrontDateText')
-  const dateGap = dateTextWrapper ? parseFloat(window.getComputedStyle(dateTextWrapper).gap || '2') * pixelRatio : 4
-  const dateStartY = blackY + (blackBoxHeight - dateFontSize - dateGap - subtitleFontSize) / 2
-
-  ctx.font = `400 ${dateFontSize}px Bitram, SUIT, sans-serif`
-  ctx.fillText(dateLabel, textX, dateStartY)
-  ctx.font = `400 ${subtitleFontSize}px Bitram, SUIT, sans-serif`
-  ctx.fillText("TODAY'S STORY CARD", textX, dateStartY + dateFontSize + dateGap)
-
-  if (iconImage) {
-    // CSS 고정값: width: 50px, height: 50px
-    const iconSize = 50 * pixelRatio
-    const iconX = width - horizontalPadding - iconSize
-    const iconY = blackY + (blackBoxHeight - iconSize) / 2
-
-    // ✅ 고품질 렌더링: 원본 이미지를 직접 스케일링
-    ctx.save()
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = 'high'
-    ctx.drawImage(iconImage, iconX, iconY, iconSize, iconSize)
-    ctx.restore()
-  }
-
-  const bodyY = blackY + blackBoxHeight
-  drawRoundedRect(ctx, 0, bodyY, width, bodyHeight, {
-    topLeft: 0,
-    topRight: 0,
-    bottomRight: sectionRadius,
-    bottomLeft: sectionRadius,
-  })
-  ctx.fillStyle = '#ff7ab8'
-  ctx.fill()
-  ctx.save()
-  drawRoundedRect(ctx, 0, bodyY, width, bodyHeight, {
-    topLeft: 0,
-    topRight: 0,
-    bottomRight: sectionRadius,
-    bottomLeft: sectionRadius,
-  })
-  ctx.clip()
-  drawImageCover(ctx, bodyBackground, 0, bodyY, width, bodyHeight)
-  ctx.restore()
-
-  const messageLines =
-    Array.isArray(card.messageLines) && card.messageLines.length > 0
-      ? card.messageLines
-      : card.message
-        ? [card.message]
-        : []
-  const visibleMessageLines = messageLines
-    .map((line) => String(line || '').trim())
-    .filter(Boolean)
-    .slice(0, 2)
-
-  // 실제 DOM에서 메시지 스타일 읽기
-  const messageElement = cardElement.querySelector('.storyCardFrontMessage')
-  const messageStyles = messageElement ? window.getComputedStyle(messageElement) : null
-  const messageMarginTop = messageStyles ? parseFloat(messageStyles.marginTop || '30') * pixelRatio : 60
-  const messageHorizontalMargin = horizontalPadding
-  const messageFontSize = messageStyles ? parseFloat(messageStyles.fontSize || '12') * pixelRatio : 24
-  const messageLineHeight = messageStyles ? parseFloat(messageStyles.lineHeight || messageFontSize * 1.4) * pixelRatio : messageFontSize * 1.4
-
-  // 메시지 위치: marginTop을 기준으로 첫 줄의 중심 계산
-  const messageY = bodyY + messageMarginTop + messageLineHeight / 2
-
-  ctx.fillStyle = '#ffffff'
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.font = `800 ${messageFontSize}px SUIT, sans-serif`
-  drawTextLines(
-    ctx,
-    visibleMessageLines.length > 0 ? visibleMessageLines : ['나만의 스토리 카드'],
-    width / 2,
-    messageY,
-    width - messageHorizontalMargin * 2,
-    messageLineHeight,
-    2,
-  )
-
-  const rows = [
-    ['오늘의 몰입력', card.immersion || '-'],
-    ['오늘의 장르', card.genre || '-'],
-    ['행운의 작품', card.luckyWork?.title?.trim() || card.luckyWork?.displayLabel?.trim() || '-'],
-  ]
-
-  // 실제 DOM에서 info rows 스타일 읽기
-  const infoRowsElement = cardElement.querySelector('.storyCardFrontInfoRows')
-  const infoRowsStyles = infoRowsElement ? window.getComputedStyle(infoRowsElement) : null
-  const firstInfoRow = cardElement.querySelector('.storyCardFrontInfoRow')
-  const firstChip = cardElement.querySelector('.storyCardFrontInfoChip')
-  const firstChipStyles = firstChip ? window.getComputedStyle(firstChip) : null
-
-  const infoBottom = infoRowsStyles ? parseFloat(infoRowsStyles.bottom || '30') * pixelRatio : 60
-  const infoRowGap = infoRowsStyles ? parseFloat(infoRowsStyles.gap || '12') * pixelRatio : 24
-  const infoFontSize = firstChipStyles ? parseFloat(firstChipStyles.fontSize || '11') * pixelRatio : 22
-  const chipHorizontalPadding = firstChipStyles ? parseFloat(firstChipStyles.paddingLeft || '10') * pixelRatio : 20
-  const fixedChipWidth = firstChipStyles ? parseFloat(firstChipStyles.width || '86') * pixelRatio : 172
-  const chipHeight = firstChipStyles ? parseFloat(firstChipStyles.height || '24') * pixelRatio : 48
-  const chipRadius = firstChipStyles ? parseFloat(firstChipStyles.borderRadius || '999') * pixelRatio : chipHeight / 2
-  const chipValueGap = firstInfoRow ? parseFloat(window.getComputedStyle(firstInfoRow).gap || '8') * pixelRatio : 16
-
-  // Row 중심점 계산: 각 row의 높이(chipHeight)를 고려해서 간격 계산
-  // 맨 아래 row부터 시작해서 위로 올라감
-  const rowCenters = [
-    bodyY + bodyHeight - infoBottom - chipHeight / 2 - (chipHeight + infoRowGap) * 2,  // 첫번째 (맨 위)
-    bodyY + bodyHeight - infoBottom - chipHeight / 2 - (chipHeight + infoRowGap),      // 두번째
-    bodyY + bodyHeight - infoBottom - chipHeight / 2,                                   // 세번째 (맨 아래)
-  ]
-  const chipX = horizontalPadding
-  const valueFont = `800 ${infoFontSize}px SUIT, sans-serif`
-
-  rows.forEach(([label, value], index) => {
-    const centerY = rowCenters[index]
-    const renderedChipWidth = drawPillText(ctx, label, chipX, centerY, {
-      font: valueFont,
-      textColor: '#ff4093',
-      backgroundColor: '#000000',
-      horizontalPadding: chipHorizontalPadding,
-      height: chipHeight,
-      width: fixedChipWidth,
-      radius: chipRadius,
-    })
-
-    const valueX = chipX + renderedChipWidth + chipValueGap
-    // CSS 고정값: arrow width 16px
-    const arrowSize = index === 2 && arrowImage ? 16 * pixelRatio : 0
-    const maxValueWidth = width - horizontalPadding - valueX - arrowSize - (arrowSize > 0 ? 2 * pixelRatio : 0)
-    ctx.fillStyle = '#131112'
-    ctx.font = valueFont
-    ctx.textAlign = 'left'
-    ctx.textBaseline = 'middle'
-    drawEllipsizedText(ctx, value, valueX, centerY, maxValueWidth)
-
-    if (arrowImage && index === 2 && arrowSize > 0) {
-      const textWidth = Math.min(ctx.measureText(value).width, maxValueWidth)
-      // CSS 고정값: gap 2px
-      const arrowGap = 2 * pixelRatio
-      const arrowX = valueX + textWidth + arrowGap
-      const arrowY = centerY - arrowSize / 2
-
-      console.log('[story-card] Drawing arrow', {
-        index,
-        arrowSize,
-        position: { x: arrowX, y: arrowY },
-        arrowImage: !!arrowImage,
-      })
-
-      ctx.drawImage(
-        arrowImage,
-        arrowX,
-        arrowY,
-        arrowSize,
-        arrowSize,
-      )
-    } else if (index === 2) {
-      console.warn('[story-card] Arrow not drawn', {
-        hasArrowImage: !!arrowImage,
-        arrowSize,
-        index,
-      })
-    }
-  })
-
-  console.log('[story-card] Canvas rendered with DOM measurements', {
-    cardSize: { width, height },
-    pixelRatio,
-    actualSize: { width: actualCardWidth, height: actualCardHeight },
-    sections: { heroHeight, blackBoxHeight, bodyHeight },
-    message: {
-      fontSize: messageFontSize,
-      lineHeight: messageLineHeight,
-      marginTop: messageMarginTop,
-      y: messageY,
-    },
-    infoRows: {
-      fontSize: infoFontSize,
-      gap: infoRowGap,
-      chipHeight,
-      bottom: infoBottom,
-      centers: rowCenters.map(y => Math.round(y)),
-    }
-  })
-
-  ctx.restore()
-  return canvas.toDataURL('image/png')
-}
-
-async function createStoryCardFinalImage(card) {
-  let lastError = null
-
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      await waitForStoryCardReady()
-      const imageUrl = await createStoryCardShareImage(card)
-      if (!imageUrl?.startsWith('data:image/png')) {
-        throw new Error('Story card renderer did not return a PNG')
-      }
-
-      console.log('[story-card] Final PNG ready', {
-        attempt,
-        byteLength: imageUrl.length,
-      })
-      return imageUrl
-    } catch (error) {
-      lastError = error
-      console.warn('[story-card] Final PNG attempt failed', {
-        attempt,
-        message: error instanceof Error ? error.message : undefined,
-      })
-      if (attempt < 3) await waitForDelay(attempt * 400)
-    }
-  }
-
-  throw lastError ?? new Error('Story card PNG generation failed')
-}
+/** 스토리 카드 페이지는 뒤로가기 대신 항상 웹뷰 닫기 / 랜딩 홈으로 보낸다. */
+const handleClose = () => closeEventPage({ useHistory: false })
 
 function XLogo({ size = 20, color = '#131112' }) {
   return (
@@ -846,22 +80,84 @@ function XLogo({ size = 20, color = '#131112' }) {
   )
 }
 
+/**
+ * 결과 카드의 PNG 를 카드 객체 단위로 캐시한다.
+ * 같은 카드에 대한 동시 요청은 한 번만 렌더링하고 그 Promise 를 공유한다.
+ */
+function useFinalCardImage(card, enabled) {
+  const imageRef = useRef({ card: null, url: '' })
+  const promiseRef = useRef({ card: null, promise: null })
+
+  const render = (targetCard) => {
+    const promise = createStoryCardFinalImage(targetCard)
+    promiseRef.current = { card: targetCard, promise }
+
+    return promise.finally(() => {
+      if (promiseRef.current.promise === promise) {
+        promiseRef.current = { card: null, promise: null }
+      }
+    })
+  }
+
+  const getFinalCardImage = async (targetCard) => {
+    if (!targetCard) throw new Error('Story card data is unavailable')
+    if (imageRef.current.card === targetCard && imageRef.current.url) {
+      return imageRef.current.url
+    }
+    if (promiseRef.current.card === targetCard && promiseRef.current.promise) {
+      return promiseRef.current.promise
+    }
+
+    const url = await render(targetCard)
+    imageRef.current = { card: targetCard, url }
+    return url
+  }
+
+  // 카드가 화면에 나타나면 미리 렌더링해 저장/공유 지연을 줄인다.
+  useEffect(() => {
+    imageRef.current = { card: null, url: '' }
+    promiseRef.current = { card: null, promise: null }
+    if (!enabled || !card) return undefined
+
+    let cancelled = false
+    render(card)
+      .then((url) => {
+        if (!cancelled) imageRef.current = { card, url }
+      })
+      .catch((error) => {
+        if (cancelled) return
+        console.error('[story-card] Initial final PNG generation failed', {
+          message: error instanceof Error ? error.message : undefined,
+        })
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [enabled, card])
+
+  return getFinalCardImage
+}
+
 export default function StoryCardEventPage({ appEventId = null, event = null }) {
   const [authSnapshot, setAuthSnapshot] = useState(getWebViewAuthSnapshot)
   const [selectedChoice, setSelectedChoice] = useState(null)
   const [drawStatus, setDrawStatus] = useState('idle')
   const [drawnCard, setDrawnCard] = useState(null)
   const [saveModalVisible, setSaveModalVisible] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
+  const [entered, setEntered] = useState(false)
+  const [guideMode, setGuideMode] = useState('entry')
   const drawControllerRef = useRef(null)
   const statusControllerRef = useRef(null)
   const modalRequiredControllerRef = useRef(null)
   const animationEndedRef = useRef(false)
   const drawFailedRef = useRef(false)
-  const finalCardImageRef = useRef({ card: null, url: '' })
-  const finalCardImagePromiseRef = useRef({ card: null, promise: null })
   const isIOS = isIOSDevice()
-  const { saveToGallery, shareImage, shareToTwitter, isMediaBusy } =
-    useCardShare()
+  const { saveToGallery, shareImage, shareToTwitter, isMediaBusy } = useCardShare()
+
+  const showCardFront = drawStatus === 'done' && drawnCard
+  const getFinalCardImage = useFinalCardImage(drawnCard, Boolean(showCardFront))
 
   useEffect(() => subscribeToWebViewAuth(setAuthSnapshot), [])
 
@@ -884,21 +180,18 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     return Number.isSafeInteger(eventId) && eventId > 0 ? eventId : null
   }, [appEventId, event?.id])
 
-  const [showGuide, setShowGuide] = useState(false)
-  const [entered, setEntered] = useState(false)
-  const [guideMode, setGuideMode] = useState('entry')
-
   useEffect(() => {
     const previousTitle = document.title
-    document.title = '오늘의 스토리 카드 이벤트 | STORIX'
-    document.documentElement.classList.add('storyCardDocument')
+    document.title = DOCUMENT_TITLE
+    document.documentElement.classList.add(DOCUMENT_CLASS)
 
     return () => {
       document.title = previousTitle
-      document.documentElement.classList.remove('storyCardDocument')
+      document.documentElement.classList.remove(DOCUMENT_CLASS)
     }
   }, [])
 
+  // 진입 시 안내 모달 노출 여부 확인. 인증/이벤트가 바뀌면 처음부터 다시 시작한다.
   useEffect(() => {
     setGuideMode('entry')
     setShowGuide(false)
@@ -933,7 +226,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
         if (modalRequired) {
           window.requestAnimationFrame(() => {
             confirmAppEvent(normalizedAppEventId).catch((error) => {
-              if (import.meta.env.DEV) {
+              if (isDev) {
                 console.warn('[story-card] app event confirm failed', {
                   status: error?.status,
                   code: error?.code,
@@ -958,6 +251,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     return () => controller.abort()
   }, [normalizedAppEventId, authSnapshot.authenticated, authSnapshot.version])
 
+  // 이미 오늘 카드를 뽑았으면 결과 카드를 바로 보여준다.
   useEffect(() => {
     if (!entered) return undefined
 
@@ -975,17 +269,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       })
       .catch((error) => {
         if (error?.name === 'AbortError') return
-        if (error?.status === 401) {
-          postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
-          return
-        }
-        postStorixWebViewMessage({
-          type: 'EVENT_ERROR',
-          payload: {
-            code: error?.code,
-            message: `스토리카드 상태 조회 실패${error?.status ? ` (${error.status})` : ''}`,
-          },
-        })
+        reportEventError(error, `스토리카드 상태 조회 실패${error?.status ? ` (${error.status})` : ''}`)
       })
       .finally(() => {
         if (statusControllerRef.current === controller) {
@@ -1001,29 +285,20 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     STORY_CARD_CHOICES.forEach((choice) => preloadStoryCardVideo(choice.videoSrc))
   }, [entered, drawnCard])
 
-  const handleBackdropClick = () => {
-    if (guideMode === 'help') {
-      setShowGuide(false)
-      return
-    }
-
+  const closeGuide = () => {
     setShowGuide(false)
-    setEntered(true)
-  }
-
-  const handleStartClick = () => {
-    if (guideMode === 'help') {
-      setShowGuide(false)
-      return
-    }
-
-    setShowGuide(false)
-    setEntered(true)
+    if (guideMode !== 'help') setEntered(true)
   }
 
   const handleHelpClick = () => {
     setGuideMode(showCardFront ? 'resultHelp' : 'help')
     setShowGuide(true)
+  }
+
+  const resetDraw = () => {
+    setSelectedChoice(null)
+    setDrawnCard(null)
+    setDrawStatus('idle')
   }
 
   const handleCardSelect = async (choice) => {
@@ -1047,21 +322,9 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       }
     } catch (error) {
       drawFailedRef.current = true
-      if (error?.status === 401) {
-        postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
-      } else {
-        postStorixWebViewMessage({
-          type: 'EVENT_ERROR',
-          payload: {
-            code: error?.code,
-            message: `스토리카드 발급 실패${error?.status ? ` (${error.status})` : ''}`,
-          },
-        })
-      }
+      reportEventError(error, `스토리카드 발급 실패${error?.status ? ` (${error.status})` : ''}`)
       if (animationEndedRef.current) {
-        setSelectedChoice(null)
-        setDrawnCard(null)
-        setDrawStatus('idle')
+        resetDraw()
       }
     } finally {
       if (drawControllerRef.current === controller) {
@@ -1074,9 +337,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     animationEndedRef.current = true
 
     if (drawFailedRef.current) {
-      setSelectedChoice(null)
-      setDrawnCard(null)
-      setDrawStatus('idle')
+      resetDraw()
       return
     }
 
@@ -1103,105 +364,24 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
   }
 
   const handleSave = () => {
-    console.log('[story-card] 💾 Save button clicked')
-    void saveToGallery(captureCard, () => setSaveModalVisible(true), 'STORIX 오늘의 스토리 카드')
+    void saveToGallery(captureCard, () => setSaveModalVisible(true))
   }
 
   const handleShare = () => {
-    console.log('[story-card] 📤 Share button clicked')
-    void shareImage(captureCard, 'STORIX 오늘의 스토리 카드')
+    void shareImage(captureCard, SHARE_MESSAGE)
   }
 
   const handleTwitterShare = () => {
-    console.log('[story-card] 🐦 Twitter share button clicked')
-    void shareToTwitter(captureCard, 'STORIX 오늘의 스토리 카드')
+    void shareToTwitter(captureCard, SHARE_MESSAGE)
   }
 
-  const showCardFront = drawStatus === 'done' && drawnCard
   const resultAiImageUrl = drawnCard?.aiImageUrl?.trim() || drawnCard?.imageUrl?.trim() || ''
   const resultBackgroundImageUrl = drawnCard?.backgroundImageUrl?.trim() || ''
   const resultIconImageUrl = drawnCard?.iconImageUrl?.trim() || ''
   const resultDateLabel = formatStoryCardDate(drawnCard?.drawnOn)
-  const resultMessageLines =
-    Array.isArray(drawnCard?.messageLines) && drawnCard.messageLines.length > 0
-      ? drawnCard.messageLines.map((line) => String(line || '').trim()).filter(Boolean).slice(0, 2)
-      : drawnCard?.message
-        ? [String(drawnCard.message).trim()].filter(Boolean)
-        : []
+  const resultMessageLines = getStoryCardMessageLines(drawnCard)
   const luckyWorkId = getLuckyWorkId(drawnCard?.luckyWork)
-  const luckyWorkLabel =
-    drawnCard?.luckyWork?.title?.trim() ||
-    drawnCard?.luckyWork?.displayLabel?.trim() ||
-    ''
-
-  const getFinalCardImage = async (card) => {
-    if (!card) throw new Error('Story card data is unavailable')
-    if (finalCardImageRef.current.card === card && finalCardImageRef.current.url) {
-      return finalCardImageRef.current.url
-    }
-    if (
-      finalCardImagePromiseRef.current.card === card &&
-      finalCardImagePromiseRef.current.promise
-    ) {
-      return finalCardImagePromiseRef.current.promise
-    }
-
-    const promise = createStoryCardFinalImage(card)
-    finalCardImagePromiseRef.current = { card, promise }
-
-    try {
-      const url = await promise
-      finalCardImageRef.current = { card, url }
-      return url
-    } finally {
-      if (finalCardImagePromiseRef.current.promise === promise) {
-        finalCardImagePromiseRef.current = { card: null, promise: null }
-      }
-    }
-  }
-
-  useEffect(() => {
-    finalCardImageRef.current = { card: null, url: '' }
-    finalCardImagePromiseRef.current = { card: null, promise: null }
-    if (!showCardFront || !drawnCard) return undefined
-
-    let cancelled = false
-    const card = drawnCard
-    const promise = createStoryCardFinalImage(card)
-    finalCardImagePromiseRef.current = { card, promise }
-
-    promise
-      .then((url) => {
-        if (cancelled) return
-        finalCardImageRef.current = { card, url }
-      })
-      .catch((error) => {
-        if (cancelled) return
-        console.error('[story-card] Initial final PNG generation failed', {
-          message: error instanceof Error ? error.message : undefined,
-        })
-      })
-      .finally(() => {
-        if (finalCardImagePromiseRef.current.promise === promise) {
-          finalCardImagePromiseRef.current = { card: null, promise: null }
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [showCardFront, drawnCard])
-
-  // 디버깅 로그
-  useEffect(() => {
-    if (showCardFront && drawnCard) {
-      console.log('[story-card] Card displayed', {
-        luckyWorkId,
-        luckyWorkLabel,
-        luckyWork: drawnCard.luckyWork,
-      })
-    }
-  }, [showCardFront, drawnCard, luckyWorkId, luckyWorkLabel])
+  const luckyWorkLabel = getLuckyWorkLabel(drawnCard?.luckyWork)
 
   const openWorksDetail = (worksId) => {
     if (!worksId) return false
@@ -1228,7 +408,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
       })
       if (openWorksDetail(searchedWorksId)) return
     } catch (error) {
-      if (import.meta.env.DEV) {
+      if (isDev) {
         console.warn('[story-card] lucky work search failed', {
           message: error instanceof Error ? error.message : undefined,
         })
@@ -1243,6 +423,8 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
     window.alert('작품 정보를 찾을 수 없습니다.')
   }
 
+  const isRevealing = drawStatus === 'drawing' || drawStatus === 'revealing'
+
   return (
     <main className={`storyCardEventPage${showCardFront ? ' storyCardEventPage-front' : ''}`}>
       <header className="storyCardTopBar">
@@ -1250,7 +432,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
           className="storyCardTopBarIconButton"
           type="button"
           aria-label="뒤로가기"
-          onClick={closeEventPage}
+          onClick={handleClose}
         >
           <img
             src={showCardFront ? '/events/story-card/icon-x.svg' : '/events/story-card/icon-arrow-back.svg'}
@@ -1288,7 +470,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 key={choice.key}
                 aria-label={choice.label}
                 onClick={() => handleCardSelect(choice.key)}
-                disabled={drawStatus === 'drawing' || drawStatus === 'revealing'}
+                disabled={isRevealing}
               >
                 <img
                   src="/events/story-card/single-card.png"
@@ -1363,7 +545,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                   ? resultMessageLines.map((line, index) => (
                       <span key={`${line}-${index}`}>{line}</span>
                     ))
-                  : '나만의 스토리 카드'}
+                  : STORY_CARD_FALLBACK_MESSAGE}
               </p>
               <div className="storyCardFrontInfoRows">
                 <div className="storyCardFrontInfoRow">
@@ -1458,7 +640,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
         <div
           className="storyCardGuideBackdrop"
           role="presentation"
-          onClick={handleBackdropClick}
+          onClick={closeGuide}
         >
           {guideMode === 'resultHelp' ? (
             <section
@@ -1477,7 +659,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 className="storyCardGuideAction storyCardGuideAction-result"
                 type="button"
                 aria-label="확인"
-                onClick={handleStartClick}
+                onClick={closeGuide}
               />
             </section>
           ) : (
@@ -1497,7 +679,7 @@ export default function StoryCardEventPage({ appEventId = null, event = null }) 
                 className="storyCardGuideAction"
                 type="button"
                 aria-label="카드 고르러 가기"
-                onClick={handleStartClick}
+                onClick={closeGuide}
               />
             </section>
           )}

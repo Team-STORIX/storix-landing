@@ -6,8 +6,9 @@ import {
   subscribeToWebViewAuth,
 } from '../lib/webViewAuth.js'
 import {
-  isStorixWebView,
+  closeEventPage,
   postStorixWebViewMessage,
+  reportEventError,
 } from '../lib/webViewBridge.js'
 import {
   checkInAttendanceEvent,
@@ -16,6 +17,10 @@ import {
 import '../attendance-event.css'
 
 const MAX_STAMP_COUNT = 12
+const DOCUMENT_TITLE = '앱 런칭 기념 출석 이벤트 | STORIX'
+const DOCUMENT_CLASS = 'attendanceDocument'
+
+const EMPTY_STAMPS = Array.from({ length: MAX_STAMP_COUNT }, () => null)
 
 function getAttendanceErrorMessage(error) {
   if (!(error instanceof ApiError)) {
@@ -38,6 +43,21 @@ function getAttendanceErrorMessage(error) {
   }
 }
 
+/** 출석 체크 응답을 현재 상태에 합친다. 다음 상태 조회 전까지 화면을 즉시 갱신하기 위함. */
+function mergeCheckInResult(currentStatus, result) {
+  if (!currentStatus) return currentStatus
+
+  return {
+    ...currentStatus,
+    attendedToday: true,
+    attendedDates: currentStatus.attendedDates.includes(result.attendedDate)
+      ? currentStatus.attendedDates
+      : [...currentStatus.attendedDates, result.attendedDate],
+    totalAttendedDays: result.totalAttendedDays,
+    issuedTickets: result.issuedTickets,
+  }
+}
+
 export default function AttendanceEventPage({ appEventId = null }) {
   const [authSnapshot, setAuthSnapshot] = useState(getWebViewAuthSnapshot)
   const [status, setStatus] = useState(null)
@@ -49,12 +69,12 @@ export default function AttendanceEventPage({ appEventId = null }) {
 
   useEffect(() => {
     const previousTitle = document.title
-    document.title = '앱 런칭 기념 출석 이벤트 | STORIX'
-    document.documentElement.classList.add('attendanceDocument')
+    document.title = DOCUMENT_TITLE
+    document.documentElement.classList.add(DOCUMENT_CLASS)
 
     return () => {
       document.title = previousTitle
-      document.documentElement.classList.remove('attendanceDocument')
+      document.documentElement.classList.remove(DOCUMENT_CLASS)
     }
   }, [])
 
@@ -81,15 +101,7 @@ export default function AttendanceEventPage({ appEventId = null }) {
 
       const message = getAttendanceErrorMessage(error)
       setStatusError(message)
-
-      if (error?.status === 401) {
-        postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
-      } else {
-        postStorixWebViewMessage({
-          type: 'EVENT_ERROR',
-          payload: { code: error?.code, message },
-        })
-      }
+      reportEventError(error, message)
 
       return null
     } finally {
@@ -115,9 +127,7 @@ export default function AttendanceEventPage({ appEventId = null }) {
   }, [authSnapshot.authenticated, authSnapshot.version, loadStatus])
 
   const stampDates = useMemo(
-    () => status
-      ? getDateKeysInRange(status.eventStartDate, status.eventEndDate, MAX_STAMP_COUNT)
-      : Array.from({ length: MAX_STAMP_COUNT }, () => null),
+    () => (status ? getDateKeysInRange(status.eventStartDate, status.eventEndDate, MAX_STAMP_COUNT) : EMPTY_STAMPS),
     [status],
   )
 
@@ -138,20 +148,6 @@ export default function AttendanceEventPage({ appEventId = null }) {
     !status.eventActive ||
     status.attendedToday
 
-  const handleBack = () => {
-    if (isStorixWebView()) {
-      postStorixWebViewMessage({ type: 'CLOSE_WEBVIEW' })
-      return
-    }
-
-    if (window.history.length > 1) {
-      window.history.back()
-      return
-    }
-
-    window.location.assign('/')
-  }
-
   const handleCheckIn = async () => {
     if (isCheckInDisabled) return
 
@@ -162,17 +158,7 @@ export default function AttendanceEventPage({ appEventId = null }) {
     try {
       const result = await checkInAttendanceEvent({ signal: controller.signal })
 
-      setStatus((currentStatus) => currentStatus
-        ? {
-            ...currentStatus,
-            attendedToday: true,
-            attendedDates: currentStatus.attendedDates.includes(result.attendedDate)
-              ? currentStatus.attendedDates
-              : [...currentStatus.attendedDates, result.attendedDate],
-            totalAttendedDays: result.totalAttendedDays,
-            issuedTickets: result.issuedTickets,
-          }
-        : currentStatus)
+      setStatus((currentStatus) => mergeCheckInResult(currentStatus, result))
 
       postStorixWebViewMessage({
         type: 'ATTENDANCE_COMPLETED',
@@ -192,13 +178,8 @@ export default function AttendanceEventPage({ appEventId = null }) {
 
       if (error?.status === 409) {
         await loadStatus({ showLoading: false })
-      } else if (error?.status === 401) {
-        postStorixWebViewMessage({ type: 'LOGIN_REQUIRED' })
       } else {
-        postStorixWebViewMessage({
-          type: 'EVENT_ERROR',
-          payload: { code: error?.code, message },
-        })
+        reportEventError(error, message)
       }
     } finally {
       if (checkInControllerRef.current === controller) {
@@ -219,7 +200,7 @@ export default function AttendanceEventPage({ appEventId = null }) {
         <button
           className="attendanceBackButton"
           type="button"
-          onClick={handleBack}
+          onClick={() => closeEventPage()}
           aria-label="뒤로가기"
         >
           <img src="/events/attendance/back.svg" alt="" />
