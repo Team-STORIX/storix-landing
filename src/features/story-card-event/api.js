@@ -1,24 +1,7 @@
-import { ApiError, apiRequest } from '../../lib/apiClient.js'
+import { apiRequest } from '../../lib/apiClient.js'
+import { assertAppEventId, createResponseAsserts } from '../../lib/apiAssert.js'
 
-function assertString(value, field) {
-  if (typeof value !== 'string') {
-    throw new ApiError(`스토리 카드 응답의 ${field} 값이 올바르지 않습니다.`, {
-      code: 'INVALID_RESPONSE',
-    })
-  }
-
-  return value
-}
-
-function assertBoolean(value, field) {
-  if (typeof value !== 'boolean') {
-    throw new ApiError(`스토리 카드 응답의 ${field} 값이 올바르지 않습니다.`, {
-      code: 'INVALID_RESPONSE',
-    })
-  }
-
-  return value
-}
+const assert = createResponseAsserts('스토리 카드')
 
 function pickString(value, fields) {
   for (const field of fields) {
@@ -57,27 +40,23 @@ function getImageCandidates(value) {
     .filter(Boolean)
 }
 
+/** 서버가 카드를 여러 키로 감싸서 내려줄 수 있어 한 곳에서 풀어준다. */
+function pickNestedCard(result) {
+  return (
+    result?.card ??
+    result?.storyCard ??
+    result?.storyCardResult ??
+    result?.drawnCard ??
+    result?.data ??
+    null
+  )
+}
+
 function unwrapStoryCardResult(result) {
   if (!result || typeof result !== 'object') return result
 
-  const nested =
-    result.card ??
-    result.storyCard ??
-    result.storyCardResult ??
-    result.drawnCard ??
-    result.data
-
-  return nested && typeof nested === 'object'
-    ? {
-        ...result,
-        ...nested,
-      }
-    : result
-}
-
-function assertNullableCard(value) {
-  if (value == null) return null
-  return parseStoryCard(value)
+  const nested = pickNestedCard(result)
+  return nested && typeof nested === 'object' ? { ...result, ...nested } : result
 }
 
 function parseLuckyWork(value) {
@@ -97,23 +76,16 @@ function parseLuckyWork(value) {
 
 function parseStoryCard(result) {
   const cardResult = unwrapStoryCardResult(result)
-
-  if (!cardResult || typeof cardResult !== 'object') {
-    throw new ApiError('스토리 카드 응답이 올바르지 않습니다.', {
-      code: 'INVALID_RESPONSE',
-    })
-  }
+  assert.object(cardResult, '스토리 카드 응답이 올바르지 않습니다.')
 
   const imageCandidates = getImageCandidates(cardResult)
-  const drawnOn = pickString(cardResult, ['drawnOn', 'drawDate', 'drawnDate', 'serviceDate', 'date', 'createdAt'])
-  const genre = pickString(cardResult, ['genre', 'genreName', 'category', 'categoryName'])
-  const immersion = pickString(cardResult, ['immersion', 'immersionLevel', 'immersionPower', 'mood'])
 
   return {
-    drawnOn,
+    drawnOn: pickString(cardResult, ['drawnOn', 'drawDate', 'drawnDate', 'serviceDate', 'date', 'createdAt']),
     alreadyDrawn: pickBoolean(cardResult, ['alreadyDrawn', 'drawnToday', 'isDrawn'], true),
-    genre,
-    aiImageUrl: pickString(cardResult, ['aiImageUrl', 'mainImageUrl', 'imageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
+    genre: pickString(cardResult, ['genre', 'genreName', 'category', 'categoryName']),
+    aiImageUrl:
+      pickString(cardResult, ['aiImageUrl', 'mainImageUrl', 'imageUrl', 'cardImageUrl']) || imageCandidates[0] || '',
     backgroundImageUrl:
       pickString(cardResult, ['backgroundImageUrl', 'backgroundUrl', 'bgImageUrl']) || imageCandidates[1] || '',
     iconImageUrl: pickString(cardResult, ['iconImageUrl', 'iconUrl', 'badgeImageUrl']) || imageCandidates[2] || '',
@@ -123,90 +95,63 @@ function parseStoryCard(result) {
     messageLines: Array.isArray(cardResult.messageLines)
       ? cardResult.messageLines.filter((line) => typeof line === 'string')
       : [],
-    immersion,
-    luckyWork: parseLuckyWork(cardResult.luckyWork ?? cardResult.work ?? cardResult.works ?? cardResult.recommendedWork),
+    immersion: pickString(cardResult, ['immersion', 'immersionLevel', 'immersionPower', 'mood']),
+    luckyWork: parseLuckyWork(
+      cardResult.luckyWork ?? cardResult.work ?? cardResult.works ?? cardResult.recommendedWork,
+    ),
   }
 }
 
 function parseStoryCardStatus(result) {
-  if (!result || typeof result !== 'object') {
-    throw new ApiError('스토리 카드 현황 응답이 올바르지 않습니다.', {
-      code: 'INVALID_RESPONSE',
-    })
-  }
+  assert.object(result, '스토리 카드 현황 응답이 올바르지 않습니다.')
 
-  const card =
-    result.card ??
-    result.storyCard ??
-    result.storyCardResult ??
-    result.drawnCard ??
-    result.data ??
-    null
+  const card = pickNestedCard(result)
 
   return {
     appEventId: typeof result.appEventId === 'number' ? result.appEventId : null,
-    eventStartDate: assertString(result.eventStartDate, 'eventStartDate'),
-    eventEndDate: assertString(result.eventEndDate, 'eventEndDate'),
-    serviceDate: assertString(result.serviceDate, 'serviceDate'),
-    eventActive: assertBoolean(result.eventActive, 'eventActive'),
-    drawnToday: assertBoolean(result.drawnToday, 'drawnToday'),
-    card: assertNullableCard(card),
+    eventStartDate: assert.string(result.eventStartDate, 'eventStartDate'),
+    eventEndDate: assert.string(result.eventEndDate, 'eventEndDate'),
+    serviceDate: assert.string(result.serviceDate, 'serviceDate'),
+    eventActive: assert.boolean(result.eventActive, 'eventActive'),
+    drawnToday: assert.boolean(result.drawnToday, 'drawnToday'),
+    card: card == null ? null : parseStoryCard(card),
   }
 }
 
 function parseModalRequired(result) {
-  if (!result || typeof result !== 'object') {
-    throw new ApiError('스토리 카드 안내 모달 응답이 올바르지 않습니다.', {
-      code: 'INVALID_RESPONSE',
-    })
-  }
+  assert.object(result, '스토리 카드 안내 모달 응답이 올바르지 않습니다.')
 
   return {
-    modalRequired: assertBoolean(result.modalRequired, 'modalRequired'),
+    modalRequired: assert.boolean(result.modalRequired, 'modalRequired'),
   }
 }
 
+/** GET /api/v1/app-events/{id}/modal-required — 진입 안내 모달을 보여줘야 하는지 */
 export async function getAppEventModalRequired(appEventId, { signal } = {}) {
-  const eventId = Number(appEventId)
-  if (!Number.isSafeInteger(eventId) || eventId <= 0) {
-    throw new ApiError('앱 이벤트 ID가 올바르지 않습니다.', {
-      code: 'INVALID_APP_EVENT_ID',
-    })
-  }
-
-  const result = await apiRequest(`/api/v1/app-events/${eventId}/modal-required`, {
-    signal,
-  })
+  const eventId = assertAppEventId(appEventId)
+  const result = await apiRequest(`/api/v1/app-events/${eventId}/modal-required`, { signal })
   return parseModalRequired(result)
 }
 
+/** PATCH /api/v1/app-events/{id}/confirm — 진입 안내 모달을 확인했다고 기록 */
 export async function confirmAppEvent(appEventId, { signal } = {}) {
-  const eventId = Number(appEventId)
-  if (!Number.isSafeInteger(eventId) || eventId <= 0) {
-    throw new ApiError('???대깽??ID媛 ?щ컮瑜댁? ?딆뒿?덈떎.', {
-      code: 'INVALID_APP_EVENT_ID',
-    })
-  }
-
-  await apiRequest(`/api/v1/app-events/${eventId}/confirm`, {
-    method: 'PATCH',
-    signal,
-  })
+  const eventId = assertAppEventId(appEventId)
+  await apiRequest(`/api/v1/app-events/${eventId}/confirm`, { method: 'PATCH', signal })
 }
 
+/** GET /api/v1/story-card-event */
 export async function getStoryCardEventStatus({ signal } = {}) {
   const result = await apiRequest('/api/v1/story-card-event', { signal })
   return parseStoryCardStatus(result)
 }
 
+/** POST /api/v1/story-card-event/draw */
 export async function drawStoryCardEvent({ signal } = {}) {
-  const result = await apiRequest('/api/v1/story-card-event/draw', {
-    method: 'POST',
-    signal,
-  })
+  const result = await apiRequest('/api/v1/story-card-event/draw', { method: 'POST', signal })
   return parseStoryCard(result)
 }
 
+/** 행운의 작품에 ID 가 없을 때 이름으로 검색해 작품 ID 를 찾는다. */
 export async function searchStoryCardLuckyWorkId({ keyword, worksType, signal } = {}) {
   const trimmedKeyword = typeof keyword === 'string' ? keyword.trim() : ''
   if (!trimmedKeyword) return null
@@ -221,9 +166,7 @@ export async function searchStoryCardLuckyWorkId({ keyword, worksType, signal } 
     params.append('worksTypes', worksType.trim())
   }
 
-  const result = await apiRequest(`/api/v2/search/works?${params.toString()}`, {
-    signal,
-  })
+  const result = await apiRequest(`/api/v2/search/works?${params.toString()}`, { signal })
   const page = result?.result ?? result
   const content = Array.isArray(page?.content) ? page.content : []
   const normalizedKeyword = trimmedKeyword.replace(/\s+/g, '').toLowerCase()

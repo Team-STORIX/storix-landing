@@ -4,148 +4,125 @@ import {
   postProfileCardImagePresignedUrl,
   uploadProfileCardImage,
 } from './profileCardShareApi.js'
-import {
-  isStorixWebView,
-  postStorixWebViewMessage,
-} from '../../lib/webViewBridge.js'
+import { isStorixWebView, requestNativeAction } from '../../lib/webViewBridge.js'
 
 const SHARE_MESSAGE = 'STORIX 오늘의 스토리 카드'
 const STORIX_SHARE_URL = 'https://www.storix.kr/'
 const TWITTER_WEB_INTENT_URL = 'https://twitter.com/intent/tweet'
+const DOWNLOAD_FILENAME = 'storix-story-card.png'
+const INVALID_IMAGE_MESSAGE = '이미지를 생성할 수 없습니다.'
 
+/**
+ * 스토리 카드 이미지 저장 / 공유 / X 공유.
+ * captureImage 는 PNG data URL 을 돌려주는 비동기 함수다.
+ * 앱 웹뷰에서는 네이티브 브릿지로, 브라우저에서는 Web Share / 다운로드로 처리한다.
+ */
 export function useCardShare() {
   const [isSaving, setIsSaving] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
   const mediaRequestInFlightRef = useRef(false)
 
-  const saveToGallery = useCallback(async (
-    captureImage,
-    onSuccess,
-    message = SHARE_MESSAGE,
-    analytics,
-  ) => {
+  /** 저장/공유가 동시에 두 번 돌지 않도록 감싼다. */
+  const runExclusive = useCallback(async (setBusy, task) => {
     if (mediaRequestInFlightRef.current) return
     mediaRequestInFlightRef.current = true
+    setBusy(true)
 
     try {
-      setIsSaving(true)
+      await task()
+    } finally {
+      setBusy(false)
+      mediaRequestInFlightRef.current = false
+    }
+  }, [])
 
-      const image = await captureImage()
-      if (!image) {
-        window.alert('이미지를 생성할 수 없습니다.')
-        return
-      }
+  const saveToGallery = useCallback(
+    (captureImage, onSuccess) =>
+      runExclusive(setIsSaving, async () => {
+        try {
+          const image = await captureImage()
+          if (!image) {
+            window.alert(INVALID_IMAGE_MESSAGE)
+            return
+          }
 
-      if (isStorixWebView()) {
-        await saveImageWithNativeBridge(image)
-      } else {
-        if (typeof image !== 'string') {
-          window.alert('이미지를 생성할 수 없습니다.')
-          return
+          if (isStorixWebView()) {
+            await saveImageWithNativeBridge(image)
+          } else {
+            if (typeof image !== 'string') {
+              window.alert(INVALID_IMAGE_MESSAGE)
+              return
+            }
+            downloadUri(image, DOWNLOAD_FILENAME)
+          }
+          onSuccess?.()
+        } catch (error) {
+          console.error('Save to gallery error:', error)
+          window.alert('이미지 저장 중 오류가 발생했습니다.')
         }
-        downloadUri(image, 'storix-story-card.png')
-      }
-      await trackCardExport(analytics)
-      onSuccess?.()
-    } catch (error) {
-      console.error('Save to gallery error:', error)
-      window.alert('이미지 저장 중 오류가 발생했습니다.')
-    } finally {
-      setIsSaving(false)
-      mediaRequestInFlightRef.current = false
-    }
-  }, [])
+      }),
+    [runExclusive],
+  )
 
-  const shareImage = useCallback(async (
-    captureImage,
-    message = SHARE_MESSAGE,
-    analytics,
-  ) => {
-    if (mediaRequestInFlightRef.current) return
-    mediaRequestInFlightRef.current = true
+  const shareImage = useCallback(
+    (captureImage, message = SHARE_MESSAGE) =>
+      runExclusive(setIsSharing, async () => {
+        try {
+          const image = await captureImage()
+          if (!image) {
+            window.alert(INVALID_IMAGE_MESSAGE)
+            return
+          }
 
-    try {
-      setIsSharing(true)
+          if (isStorixWebView()) {
+            await shareImageWithNativeBridge(image, message, 'default')
+            return
+          }
 
-      const image = await captureImage()
-      if (!image) {
-        window.alert('이미지를 생성할 수 없습니다.')
-        return
-      }
+          if (typeof image !== 'string') {
+            window.alert(INVALID_IMAGE_MESSAGE)
+            return
+          }
 
-      if (isStorixWebView()) {
-        await shareImageWithNativeBridge(image, message, 'default')
-        await trackCardShareSheet(analytics)
-        return
-      }
+          const file = await dataUriToFile(image, DOWNLOAD_FILENAME)
+          if (file && navigator.canShare?.({ files: [file] })) {
+            await navigator.share({ title: message, text: getShareMessage(message), files: [file] })
+            return
+          }
 
-      if (typeof image !== 'string') {
-        window.alert('이미지를 생성할 수 없습니다.')
-        return
-      }
+          if (navigator.share) {
+            await navigator.share({ title: message, text: getShareMessage(message), url: STORIX_SHARE_URL })
+            return
+          }
 
-      const file = await dataUriToFile(image, 'storix-story-card.png')
-      if (file && navigator.canShare?.({ files: [file] })) {
-        await navigator.share({
-          title: message,
-          text: getShareMessage(message),
-          files: [file],
-        })
-        await trackCardShareSheet(analytics)
-        return
-      }
+          downloadUri(image, DOWNLOAD_FILENAME)
+        } catch (error) {
+          console.error('Share error:', error)
+          window.alert('이미지 공유 중 오류가 발생했습니다.')
+        }
+      }),
+    [runExclusive],
+  )
 
-      if (navigator.share) {
-        await navigator.share({
-          title: message,
-          text: getShareMessage(message),
-          url: STORIX_SHARE_URL,
-        })
-        await trackCardShareSheet(analytics)
-        return
-      }
+  const shareToTwitter = useCallback(
+    (captureImage, message = SHARE_MESSAGE) =>
+      runExclusive(setIsSharing, async () => {
+        try {
+          const image = await captureImage()
+          if (isStorixWebView() && image) {
+            await shareImageWithNativeBridge(image, message, 'twitter')
+            return
+          }
 
-      downloadUri(image, 'storix-story-card.png')
-      await trackCardShareSheet(analytics)
-    } catch (error) {
-      console.error('Share error:', error)
-      window.alert('이미지 공유 중 오류가 발생했습니다.')
-    } finally {
-      setIsSharing(false)
-      mediaRequestInFlightRef.current = false
-    }
-  }, [])
-
-  const shareToTwitter = useCallback(async (
-    captureImage,
-    message = SHARE_MESSAGE,
-    analytics,
-  ) => {
-    if (mediaRequestInFlightRef.current) return
-    mediaRequestInFlightRef.current = true
-
-    try {
-      setIsSharing(true)
-
-      const image = await captureImage()
-      if (isStorixWebView() && image) {
-        await shareImageWithNativeBridge(image, message, 'twitter')
-        await trackTwitterShare(analytics)
-        return
-      }
-
-      const shareUrl =
-        typeof image === 'string' ? await createWebShareUrlSafely(image) : undefined
-      openTwitterWebIntent(shareUrl, message)
-      await trackTwitterShare(analytics)
-    } catch (error) {
-      console.error('Twitter share error:', error)
-      openTwitterWebIntent(undefined, message)
-    } finally {
-      setIsSharing(false)
-      mediaRequestInFlightRef.current = false
-    }
-  }, [])
+          const shareUrl = typeof image === 'string' ? await createWebShareUrlSafely(image) : undefined
+          openTwitterWebIntent(shareUrl, message)
+        } catch (error) {
+          console.error('Twitter share error:', error)
+          openTwitterWebIntent(undefined, message)
+        }
+      }),
+    [runExclusive],
+  )
 
   return {
     saveToGallery,
@@ -157,27 +134,7 @@ export function useCardShare() {
   }
 }
 
-function saveImageWithNativeBridge(image) {
-  const payload = getNativeImagePayload(image)
-  if (!payload) return Promise.reject(new Error('Invalid native image payload'))
-
-  return sendImageActionWithNativeBridge(
-    'SAVE_STORY_CARD_IMAGE',
-    'SAVE_STORY_CARD_IMAGE_RESULT',
-    payload,
-  )
-}
-
-function shareImageWithNativeBridge(image, message, target) {
-  const payload = getNativeImagePayload(image)
-  if (!payload) return Promise.reject(new Error('Invalid native image payload'))
-
-  return sendImageActionWithNativeBridge(
-    'SHARE_STORY_CARD_IMAGE',
-    'SHARE_STORY_CARD_IMAGE_RESULT',
-    { ...payload, message, target },
-  )
-}
+// ---------- native bridge ----------
 
 function getNativeImagePayload(image) {
   if (typeof image === 'string') return { uri: image }
@@ -185,64 +142,33 @@ function getNativeImagePayload(image) {
 }
 
 function sendImageActionWithNativeBridge(type, resultType, payload) {
-  return new Promise((resolve, reject) => {
-    const requestId = `story-card-${type.toLowerCase()}-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2)}`
-
-    const cleanup = () => {
-      window.removeEventListener('message', handleMessage)
-      window.removeEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
-      window.clearTimeout(timeoutId)
-    }
-
-    const handleResult = (rawData) => {
-      try {
-        const message =
-          typeof rawData === 'string' ? JSON.parse(rawData) : rawData
-
-        if (
-          message?.type !== resultType ||
-          message?.payload?.requestId !== requestId
-        ) {
-          return
-        }
-
-        cleanup()
-        if (message.payload.success) resolve()
-        else reject(new Error(`Native ${type} failed`))
-      } catch {
-        // Ignore unrelated bridge messages.
-      }
-    }
-
-    function handleMessage(event) {
-      handleResult(event.data)
-    }
-
-    function handleNativeMessage(event) {
-      handleResult(event.detail)
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      cleanup()
-      reject(new Error(`Native ${type} timed out`))
-    }, 15000)
-
-    window.addEventListener('message', handleMessage)
-    window.addEventListener('STORIX_NATIVE_MESSAGE', handleNativeMessage)
-
-    const sent = postStorixWebViewMessage({
-      type,
-      payload: { requestId, ...payload },
-    })
-
-    if (!sent) {
-      cleanup()
-      reject(new Error('Native bridge unavailable'))
-    }
+  return requestNativeAction({
+    type,
+    resultType,
+    requestIdPrefix: `story-card-${type.toLowerCase()}`,
+    payload,
   })
 }
+
+function saveImageWithNativeBridge(image) {
+  const payload = getNativeImagePayload(image)
+  if (!payload) return Promise.reject(new Error('Invalid native image payload'))
+
+  return sendImageActionWithNativeBridge('SAVE_STORY_CARD_IMAGE', 'SAVE_STORY_CARD_IMAGE_RESULT', payload)
+}
+
+function shareImageWithNativeBridge(image, message, target) {
+  const payload = getNativeImagePayload(image)
+  if (!payload) return Promise.reject(new Error('Invalid native image payload'))
+
+  return sendImageActionWithNativeBridge('SHARE_STORY_CARD_IMAGE', 'SHARE_STORY_CARD_IMAGE_RESULT', {
+    ...payload,
+    message,
+    target,
+  })
+}
+
+// ---------- browser fallbacks ----------
 
 function downloadUri(uri, filename) {
   const anchor = document.createElement('a')
@@ -269,11 +195,7 @@ async function uploadProfileCardForWebShare(uri) {
   const contentType = 'image/png'
   const presigned = await postProfileCardImagePresignedUrl(contentType)
 
-  await uploadProfileCardImage({
-    url: presigned.url,
-    uri,
-    contentType,
-  })
+  await uploadProfileCardImage({ url: presigned.url, uri, contentType })
 
   const share = await createProfileCardShare(presigned.objectKey)
   return share.shareUrl
@@ -294,22 +216,7 @@ async function createWebShareUrlSafely(uri) {
 
 function openTwitterWebIntent(shareUrl, message = SHARE_MESSAGE) {
   const text = encodeURIComponent(getShareMessage(message))
-  const query = shareUrl
-    ? `text=${text}&url=${encodeURIComponent(shareUrl)}`
-    : `text=${text}`
+  const query = shareUrl ? `text=${text}&url=${encodeURIComponent(shareUrl)}` : `text=${text}`
 
   window.open(`${TWITTER_WEB_INTENT_URL}?${query}`, '_blank', 'noopener,noreferrer')
-}
-
-async function trackCardExport(analytics) {
-  if (!analytics) return
-}
-
-async function trackCardShareSheet(analytics) {
-  if (!analytics) return
-}
-
-async function trackTwitterShare(analytics) {
-  if (!analytics) return
-  await trackCardShareSheet(analytics)
 }
